@@ -9,7 +9,7 @@ import requests
 app = Flask(__name__)
 
 # LINE Token 設定
-CHANNEL_ACCESS_TOKEN = "你的 Channel Access Token"
+CHANNEL_ACCESS_TOKEN = "liqx01baPcbWbRF5if7oqBsZyf2+2L0eTOwvbIJ6f2Wec6is4sVd5onjl4fQAmc4n8EuqMfo7prlaG5la6kXb/y1gWOnk8ztwjjx2ZnukQbPJQeDwwcPEdFTOGOmQ1t88bQLvgQVczlzc/S9Q/6y5gdB04t89/1O/w1cDnyilFU="
 
 # 玩家狀態
 players = {}
