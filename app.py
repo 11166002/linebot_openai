@@ -40,7 +40,7 @@ kana_dict = {
     "じゃ": "ja", "じゅ": "ju", "じょ": "jo",
     "びゃ": "bya", "びゅ": "byu", "びょ": "byo",
     "ぴゃ": "pya", "ぴゅ": "pyu", "ぴょ": "pyo"
-}
+
 
 kana_table_rows = [
     ("あ", "ア", "a"), ("い", "イ", "i"), ("う", "ウ", "u"), ("え", "エ", "e"), ("お", "オ", "o"),
@@ -65,7 +65,7 @@ maze = [
     ["⬛", "⬜", "⬛", "⬛", "⬛", "⬜", "⬛"],
     ["⬛", "⬛", "⬛", "⬛", "⬛", "⬛", "⬛"]
 ]
-}", "⬛", "⬛", "⬛", "⬛", "⬛", "⬛"],
+", "⬛", "⬛", "⬛", "⬛", "⬛", "⬛"],
     ["⬛", "⬜", "⬜", "⬛", "⬜", "⬜", "⬛"],
     ["⬛", "⬛", "⬜", "⬛", "⬛", "⬜", "⛩️"],
     ["⬛", "⬜", "⬜", "⬜", "⬛", "⬛", "⬛"],
@@ -88,8 +88,8 @@ movable = [
 ]
 goal = (2,6)
 quiz_positions = [(2,2), (3,1), (4,3), (4,5)]
-players = {}
-racers = {}
+players = {
+racers = {
 
 @app.route("/callback", methods=["POST"])
 def callback():
@@ -118,7 +118,7 @@ def callback():
                                     "text": "請選擇功能",
                                     "size": "lg",
                                     "weight": "bold"
-                                },
+                                ,
                                 {
                                     "type": "button",
                                     "style": "primary",
@@ -126,15 +126,15 @@ def callback():
                                         "type": "message",
                                         "label": "🏎️ 賽車遊戲",
                                         "text": "我要玩賽車遊戲"
-                                    }
-                                },
+                                    
+                                ,
                                 {
                                     "type": "image",
                                     "url": "https://i.imgur.com/VFegO6L.png",
                                     "size": "full",
                                     "aspectMode": "cover",
                                     "aspectRatio": "20:13"
-                                },
+                                ,
                                 {
                                     "type": "button",
                                     "style": "primary",
@@ -142,8 +142,8 @@ def callback():
                                         "type": "message",
                                         "label": "📖 查看五十音",
                                         "text": "我要看五十音"
-                                    }
-                                },
+                                    
+                                ,
                                 {
                                     "type": "button",
                                     "style": "primary",
@@ -151,8 +151,8 @@ def callback():
                                         "type": "message",
                                         "label": "🎮 開始迷宮遊戲",
                                         "text": "我要玩迷宮遊戲"
-                                    }
-                                },
+                                    
+                                ,
                                 {
                                     "type": "button",
                                     "style": "secondary",
@@ -160,8 +160,8 @@ def callback():
                                         "type": "message",
                                         "label": "ℹ️ 遊戲說明",
                                         "text": "遊戲說明"
-                                    }
-                                },
+                                    
+                                ,
                                 {
                                     "type": "button",
                                     "style": "secondary",
@@ -169,21 +169,21 @@ def callback():
                                         "type": "message",
                                         "label": "❌ 離開遊戲",
                                         "text": "退出遊戲"
-                                    }
-                                }
+                                    
+                                
                             ]
-                        }
-                    }
-                }
+                        
+                    
+                
 
                 headers = {
-                    "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
+                    "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN",
                     "Content-Type": "application/json"
-                }
+                
                 body = {
                     "replyToken": reply_token,
                     "messages": [flex_message]
-                }
+                
                 requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
             elif text == "1" or text == "我要看五十音":
@@ -202,11 +202,11 @@ def callback():
 ⛩️ 終點
 
 👉 準備好了嗎？請輸入：「我迫不及待要玩啦」開始遊戲！")
-                players[user_id] = {"pos": (1,1), "quiz": None}
+                players[user_id] = {"pos": (1,1), "quiz": None
                 reply_text(reply_token, render_map((1,1)) + "\n\n遊戲開始！請輸入「上」「下」「左」「右」移動。")
 
             elif text == "我迫不及待要玩啦":
-                players[user_id] = {"pos": (1,1), "quiz": None}
+                players[user_id] = {"pos": (1,1), "quiz": None
                 reply_text(reply_token, render_map((1,1)) + "
 
 遊戲開始！請輸入「上」「下」「左」「右」移動。")
@@ -217,9 +217,9 @@ def callback():
 
             elif text == "我要玩賽車遊戲":
                 reply_token_headers = {
-                    "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
+                    "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN",
                     "Content-Type": "application/json"
-                }
+                
                 guide_with_image = {
                     "replyToken": reply_token,
                     "messages": [
@@ -227,27 +227,27 @@ def callback():
                             "type": "image",
                             "originalContentUrl": "https://files.chatbox.com/cdn/file_00000000919462309efeeaa53b057f54.png",
                             "previewImageUrl": "https://files.chatbox.com/cdn/file_00000000919462309efeeaa53b057f54.png"
-                        },
+                        ,
                         {
                             "type": "text",
                             "text": "🏎️ 賽車遊戲說明：
 你將在 30 秒內答對五十音拼音，推進賽車，每題加 10 分，答錯扣 1 條命（共三條）。完成 5 題即衝線獲勝！
 
 👉 輸入：「我準備好要開車啦」開始遊戲！"
-                        }
+                        
                     ]
-                }
+                
                 requests.post("https://api.line.me/v2/bot/message/reply", headers=reply_token_headers, json=guide_with_image)
-                racers[user_id] = {"pos": 0, "target": random.choice(list(kana_dict.items())), "start_time": time.time(), "lives": 3, "score": 0}
+                racers[user_id] = {"pos": 0, "target": random.choice(list(kana_dict.items())), "start_time": time.time(), "lives": 3, "score": 0
                 kana, _ = racers[user_id]["target"]
                 reply_text(reply_token, f"🏁 賽車遊戲開始！30 秒內完成 5 題並保住 3 條命。
-請輸入「{kana}」的羅馬拼音來推進賽車！")
+請輸入「{kana」的羅馬拼音來推進賽車！")
 
             elif text == "我準備好要開車啦":
-                racers[user_id] = {"pos": 0, "target": random.choice(list(kana_dict.items())), "start_time": time.time(), "lives": 3, "score": 0}
+                racers[user_id] = {"pos": 0, "target": random.choice(list(kana_dict.items())), "start_time": time.time(), "lives": 3, "score": 0
                 kana, _ = racers[user_id]["target"]
                 reply_text(reply_token, f"🏁 賽車遊戲開始！
-請輸入「{kana}」的羅馬拼音來推進賽車！")
+請輸入「{kana」的羅馬拼音來推進賽車！")
 
             elif user_id in racers:
                 elapsed = time.time() - racers[user_id].get("start_time", 0)
@@ -264,32 +264,32 @@ def callback():
                         score = racers[user_id]["score"]
                         del racers[user_id]
                         reply_text(reply_token, f"🎉 衝線成功！你完成了賽車挑戰！
-最終得分：{score} 分")
+最終得分：{score 分")
                     else:
                         racers[user_id]["target"] = random.choice(list(kana_dict.items()))
                         next_kana, _ = racers[user_id]["target"]
                         track = "🚗" + "━" * racers[user_id]["pos"] + "🏁"
-                        reply_text(reply_token, f"✅ 正確！你已推進 {racers[user_id]['pos']} 格
-{track}
-💯 分數：{racers[user_id]['score']}
-❤️ 剩餘命數：{racers[user_id]['lives']}
-下一題：「{next_kana}」 的羅馬拼音是？")
+                        reply_text(reply_token, f"✅ 正確！你已推進 {racers[user_id]['pos'] 格
+{track
+💯 分數：{racers[user_id]['score']
+❤️ 剩餘命數：{racers[user_id]['lives']
+下一題：「{next_kana」 的羅馬拼音是？")
                 else:
                     racers[user_id]["lives"] -= 1
                     if racers[user_id]["lives"] <= 0:
                         del racers[user_id]
                         reply_text(reply_token, "💥 你失去所有命，遊戲結束！")
                     else:
-                        reply_text(reply_token, f"❌ 錯誤！再試一次：「{kana}」的羅馬拼音是？
-❤️ 剩餘命數：{racers[user_id]['lives']}")
+                        reply_text(reply_token, f"❌ 錯誤！再試一次：「{kana」的羅馬拼音是？
+❤️ 剩餘命數：{racers[user_id]['lives']")
                         racers[user_id]["target"] = random.choice(list(kana_dict.items()))
                         next_kana, _ = racers[user_id]["target"]
                         track = "🚗" + "━" * racers[user_id]["pos"] + "🏁"
-                        reply_text(reply_token, f"正確！你已推進：{racers[user_id]['pos']} 格
-{track}
-下一題：「{next_kana}」 的羅馬拼音是？")
+                        reply_text(reply_token, f"正確！你已推進：{racers[user_id]['pos'] 格
+{track
+下一題：「{next_kana」 的羅馬拼音是？")
                 else:
-                    reply_text(reply_token, f"❌ 錯誤，再試一次：「{kana}」的羅馬拼音是？")
+                    reply_text(reply_token, f"❌ 錯誤，再試一次：「{kana」的羅馬拼音是？")
 
             elif user_id in players and players[user_id]["quiz"]:
                 result = maze_game(user_id, text)
@@ -303,12 +303,12 @@ def callback():
 def get_kana_table():
     table = "\U0001F4D6 日語五十音對照表\n\n平假名\t片假名\t羅馬拼音\n" + ("-" * 28) + "\n"
     for h, k, r in kana_table_rows:
-        table += f"{h}\t{k}\t{r}\n"
+        table += f"{h\t{k\t{r\n"
     return table
 
 def maze_game(user, message):
     if user not in players:
-        players[user] = {"pos": (1,1), "quiz": None}
+        players[user] = {"pos": (1,1), "quiz": None
 
     player = players[user]
 
@@ -316,13 +316,13 @@ def maze_game(user, message):
         kana, answer = player["quiz"]
         if message.lower() == answer:
             player["quiz"] = None
-            return {"map": render_map(player["pos"]), "message": "✅ 回答正確，繼續前進！"}
+            return {"map": render_map(player["pos"]), "message": "✅ 回答正確，繼續前進！"
         else:
-            return {"map": render_map(player["pos"]), "message": f"❌ 錯誤！再試一次：「{kana}」的羅馬拼音是？"}
+            return {"map": render_map(player["pos"]), "message": f"❌ 錯誤！再試一次：「{kana」的羅馬拼音是？"
 
-    direction = {"上": (-1, 0), "下": (1, 0), "左": (0, -1), "右": (0, 1)}
+    direction = {"上": (-1, 0), "下": (1, 0), "左": (0, -1), "右": (0, 1)
     if message not in direction:
-        return {"map": render_map(player["pos"]), "message": "請輸入方向：上、下、左、右"}
+        return {"map": render_map(player["pos"]), "message": "請輸入方向：上、下、左、右"
 
     dy, dx = direction[message]
     y, x = player["pos"]
@@ -332,26 +332,26 @@ def maze_game(user, message):
         # 如果玩家靠近終點前一格，打開周圍牆壁作為動態機關
         if abs(new_pos[0] - goal[0]) + abs(new_pos[1] - goal[1]) == 1:
             movable.append(goal)
-            return {"map": render_map(player["pos"]), "message": "🌀 終點前的門打開了！快往⛩️前進！"}
+            return {"map": render_map(player["pos"]), "message": "🌀 終點前的門打開了！快往⛩️前進！"
 
-        return {"map": render_map(player["pos"]), "message": "🚧 前方是牆，不能走喔！"}
+        return {"map": render_map(player["pos"]), "message": "🚧 前方是牆，不能走喔！"
 
     player["pos"] = new_pos
 
     if abs(new_pos[0] - goal[0]) + abs(new_pos[1] - goal[1]) == 1:
         return {"map": render_map(new_pos), "message": "💯 加油加油！剩一步囉！快到終點！
-🎉🎉🎉"}
+🎉🎉🎉"
 
     if new_pos == goal:
         players.pop(user)
-        return {"map": render_map(new_pos), "message": "🎉 恭喜你到達終點！遊戲完成！"}
+        return {"map": render_map(new_pos), "message": "🎉 恭喜你到達終點！遊戲完成！"
 
     if new_pos in quiz_positions:
         kana, roma = random.choice(list(kana_dict.items()))
         player["quiz"] = (kana, roma)
-        return {"map": render_map(new_pos), "message": f"❓ 挑戰：「{kana}」的羅馬拼音是？請輸入答案"}
+        return {"map": render_map(new_pos), "message": f"❓ 挑戰：「{kana」的羅馬拼音是？請輸入答案"
 
-    return {"map": render_map(new_pos), "message": "你移動了，可以繼續前進"}
+    return {"map": render_map(new_pos), "message": "你移動了，可以繼續前進"
 
 def render_map(player_pos):
     result = ""
@@ -369,11 +369,11 @@ def render_map(player_pos):
 
 def reply_text(reply_token, text):
     headers = {
-        "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
+        "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN",
         "Content-Type": "application/json"
-    }
+    
     body = {
         "replyToken": reply_token,
-        "messages": [{"type": "text", "text": text}]
-    }
+        "messages": [{"type": "text", "text": text]
+    
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
