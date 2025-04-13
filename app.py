@@ -1,15 +1,15 @@
 from flask import Flask, request, jsonify
 import random
-import time
 import requests
 
 app = Flask(__name__)
 
 # ========== LINE Token ==========
-CHANNEL_ACCESS_TOKEN = "你的 liqx01baPcbWbRF5if7oqBsZyf2+2L0eTOwvbIJ6f2Wec6is4sVd5onjl4fQAmc4n8EuqMfo7prlaG5la6kXb/y1gWOnk8ztwjjx2ZnukQbPJQeDwwcPEdFTOGOmQ1t88bQLvgQVczlzc/S9Q/6y5gdB04t89/1O/w1cDnyilFU="
+CHANNEL_ACCESS_TOKEN = "liqx01baPcbWbRF5if7oqBsZyf2+2L0eTOwvbIJ6f2Wec6is4sVd5onjl4fQAmc4n8EuqMfo7prlaG5la6kXb/y1gWOnk8ztwjjx2ZnukQbPJQeDwwcPEdFTOGOmQ1t88bQLvgQVczlzc/S9Q/6y5gdB04t89/1O/w1cDnyilFU="
 
 # ========== 五十音資料 ==========
 kana_dict = {
+    # 清音
     "あ": "a", "い": "i", "う": "u", "え": "e", "お": "o",
     "か": "ka", "き": "ki", "く": "ku", "け": "ke", "こ": "ko",
     "さ": "sa", "し": "shi", "す": "su", "せ": "se", "そ": "so",
@@ -19,7 +19,31 @@ kana_dict = {
     "ま": "ma", "み": "mi", "む": "mu", "め": "me", "も": "mo",
     "や": "ya", "ゆ": "yu", "よ": "yo",
     "ら": "ra", "り": "ri", "る": "ru", "れ": "re", "ろ": "ro",
-    "わ": "wa", "を": "wo", "ん": "n"
+    "わ": "wa", "を": "wo",
+    "ん": "n",
+
+    # 濁音
+    "が": "ga", "ぎ": "gi", "ぐ": "gu", "げ": "ge", "ご": "go",
+    "ざ": "za", "じ": "ji", "ず": "zu", "ぜ": "ze", "ぞ": "zo",
+    "だ": "da", "ぢ": "ji", "づ": "zu", "で": "de", "ど": "do",
+    "ば": "ba", "び": "bi", "ぶ": "bu", "べ": "be", "ぼ": "bo",
+    "ぱ": "pa", "ぴ": "pi", "ぷ": "pu", "ぺ": "pe", "ぽ": "po",
+
+    # 半濁音
+    "ぱ": "pa", "ぴ": "pi", "ぷ": "pu", "ぺ": "pe", "ぽ": "po",
+
+    # 拗音
+    "きゃ": "kya", "きゅ": "kyu", "きょ": "kyo",
+    "しゃ": "sha", "しゅ": "shu", "しょ": "sho",
+    "ちゃ": "cha", "ちゅ": "chu", "ちょ": "cho",
+    "にゃ": "nya", "にゅ": "nyu", "にょ": "nyo",
+    "ひゃ": "hya", "ひゅ": "hyu", "ひょ": "hyo",
+    "みゃ": "mya", "みゅ": "myu", "みょ": "myo",
+    "りゃ": "rya", "りゅ": "ryu", "りょ": "ryo",
+    "ぎゃ": "gya", "ぎゅ": "gyu", "ぎょ": "gyo",
+    "じゃ": "ja", "じゅ": "ju", "じょ": "jo",
+    "びゃ": "bya", "びゅ": "byu", "びょ": "byo",
+    "ぴゃ": "pya", "ぴゅ": "pyu", "ぴょ": "pyo"
 }
 
 kana_table_rows = [
@@ -32,26 +56,46 @@ kana_table_rows = [
     ("ま", "マ", "ma"), ("み", "ミ", "mi"), ("む", "ム", "mu"), ("め", "メ", "me"), ("も", "モ", "mo"),
     ("や", "ヤ", "ya"), ("ゆ", "ユ", "yu"), ("よ", "ヨ", "yo"),
     ("ら", "ラ", "ra"), ("り", "リ", "ri"), ("る", "ル", "ru"), ("れ", "レ", "re"), ("ろ", "ロ", "ro"),
-    ("わ", "ワ", "wa"), ("を", "ヲ", "wo"), ("ん", "ン", "n")
+    ("わ", "ワ", "wa"), ("を", "ヲ", "wo"),
+    ("ん", "ン", "n"),
+
+    # 濁音
+    ("が", "ガ", "ga"), ("ぎ", "ギ", "gi"), ("ぐ", "グ", "gu"), ("げ", "ゲ", "ge"), ("ご", "ゴ", "go"),
+    ("ざ", "ザ", "za"), ("じ", "ジ", "ji"), ("ず", "ズ", "zu"), ("ぜ", "ゼ", "ze"), ("ぞ", "ゾ", "zo"),
+    ("だ", "ダ", "da"), ("ぢ", "ヂ", "ji"), ("づ", "ヅ", "zu"), ("で", "デ", "de"), ("ど", "ド", "do"),
+    ("ば", "バ", "ba"), ("び", "ビ", "bi"), ("ぶ", "ブ", "bu"), ("べ", "ベ", "be"), ("ぼ", "ボ", "bo"),
+    ("ぱ", "パ", "pa"), ("ぴ", "ピ", "pi"), ("ぷ", "プ", "pu"), ("ぺ", "ペ", "pe"), ("ぽ", "ポ", "po"),
+
+    # 半濁音
+    ("ぱ", "パ", "pa"), ("ぴ", "ピ", "pi"), ("ぷ", "プ", "pu"), ("ぺ", "ペ", "pe"), ("ぽ", "ポ", "po"),
+
+    # 拗音
+    ("きゃ", "キャ", "kya"), ("きゅ", "キュ", "kyu"), ("きょ", "キョ", "kyo"),
+    ("しゃ", "シャ", "sha"), ("しゅ", "シュ", "shu"), ("しょ", "ショ", "sho"),
+    ("ちゃ", "チャ", "cha"), ("ちゅ", "チュ", "chu"), ("ちょ", "チョ", "cho"),
+    ("にゃ", "ニャ", "nya"), ("にゅ", "ニュ", "nyu"), ("にょ", "ニョ", "nyo"),
+    ("ひゃ", "ヒャ", "hya"), ("ひゅ", "ヒュ", "hyu"), ("ひょ", "ヒョ", "hyo"),
+    ("みゃ", "ミャ", "mya"), ("みゅ", "ミュ", "myu"), ("みょ", "ミョ", "myo"),
+    ("りゃ", "リャ", "rya"), ("りゅ", "リュ", "ryu"), ("りょ", "リョ", "ryo"),
+    ("ぎゃ", "ギャ", "gya"), ("ぎゅ", "ギュ", "gyu"), ("ぎょ", "ギョ", "gyo"),
+    ("じゃ", "ジャ", "ja"), ("じゅ", "ジュ", "ju"), ("じょ", "ジョ", "jo"),
+    ("びゃ", "ビャ", "bya"), ("びゅ", "ビュ", "byu"), ("びょ", "ビョ", "byo"),
+    ("ぴゃ", "ピャ", "pya"), ("ぴゅ", "ピュ", "pyu"), ("ぴょ", "ピョ", "pyo")
 ]
 
 # ========== 迷宮設定 ==========
 maze = [
-    ["⬛", "⬛", "⬛", "⬛", "⬛", "⬛", "⬛"],
-    ["⬛", "⬜", "⬛", "⬛", "⬛", "⬛", "⬛"],
-    ["⬛", "⬛", "⬜", "⬛", "⬛", "⬜", "⛩️"],
-    ["⬛", "⬜", "⬜", "⬛", "⬛", "⬛", "⬛"],
-    ["⬛", "⬛", "⬛", "⬛", "⬛", "⬛", "⬛"],
-    ["⬛", "⬛", "⬛", "⬛", "⬛", "⬛", "⬛"]
+    ["🧱", "🧱", "🧱", "🧱", "🧱"],
+    ["🧱", "⬜", "⬛", "⬛", "🧱"],
+    ["🧱", "⬛", "⬛", "⬛", "⬛"],
+    ["🧱", "⬛", "⬜", "⬛", "⬛"],
+    ["🧱", "🧱", "🧱", "⬛", "🧱"]
 ]
 
-movable = [(1,1), (1,2), (2,1), (2,2), (3,1), (4,1), (4,2), (5,1)]
-goal = (2,6)
-quiz_positions = [(2,3), (3,4)]
+movable = [(1,1), (2,1), (2,2), (3,2)]
+goal = (3,2)
+quiz_positions = [(2,1), (3,2)]
 players = {}
-
-# ========== 賽車遊戲設定 ==========
-racers = {}
 
 @app.route("/callback", methods=["POST"])
 def callback():
@@ -65,86 +109,25 @@ def callback():
             text = event["message"]["text"].strip()
 
             if text == "主選單":
-                flex_message = {
-                    "type": "flex",
-                    "altText": "請選擇功能",
-                    "contents": {
-                        "type": "bubble",
-                        "body": {
-                            "type": "box",
-                            "layout": "vertical",
-                            "spacing": "md",
-                            "contents": [
-                                {
-                                    "type": "text",
-                                    "text": "請選擇功能",
-                                    "size": "lg",
-                                    "weight": "bold"
-                                },
-                                {
-                                    "type": "button",
-                                    "style": "primary",
-                                    "action": {
-                                        "type": "message",
-                                        "label": "🏎️ 賽車遊戲",
-                                        "text": "我要玩賽車遊戲"
-                                    }
-                                },
-                                {
-                                    "type": "button",
-                                    "style": "primary",
-                                    "action": {
-                                        "type": "message",
-                                        "label": "📖 查看五十音",
-                                        "text": "我要看五十音"
-                                    }
-                                },
-                                {
-                                    "type": "button",
-                                    "style": "primary",
-                                    "action": {
-                                        "type": "message",
-                                        "label": "🎮 開始迷宮遊戲",
-                                        "text": "我要玩迷宮遊戲"
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-
-                headers = {
-                    "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
-                    "Content-Type": "application/json"
-                }
-                body = {
-                    "replyToken": reply_token,
-                    "messages": [flex_message]
-                }
-                requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
+                reply_text(reply_token, "請選擇：\n1️⃣ 我要看五十音\n2️⃣ 我要玩迷宮遊戲")
 
             elif text == "1" or text == "我要看五十音":
                 reply_text(reply_token, get_kana_table())
 
             elif text == "2" or text == "我要玩迷宮遊戲":
-                players[user_id] = {"pos": (1, 1), "quiz": None}
-                reply_text(reply_token, render_map((1, 1)) + "\n\n遊戲開始！請輸入「上」「下」「左」「右」移動。")
-
-            elif text == "3" or text == "我要玩賽車遊戲":
-                racers[user_id] = {"pos": 0, "target": random.choice(list(kana_dict.items())), "start_time": time.time(), "lives": 3, "score": 0}
-                kana, _ = racers[user_id]["target"]
-                reply_text(reply_token, f"🏁 賽車遊戲開始！30 秒內完成 5 題並保住 3 條命。\n請輸入「{kana}」的羅馬拼音來推進賽車！")
+                players[user_id] = {"pos": (1,1), "quiz": None}
+                reply_text(reply_token, render_map((1,1)) + "\n\n遊戲開始！請輸入「上」「下」「左」「右」移動。")
 
             elif text in ["上", "下", "左", "右"]:
                 result = maze_game(user_id, text)
                 reply_text(reply_token, result["map"] + "\n\n" + result["message"])
 
-            elif text in ["前進", "加速", "減速"]:
-                result = racing_game(user_id, text)
-                reply_text(reply_token, result["message"])
+            elif user_id in players and players[user_id]["quiz"]:
+                result = maze_game(user_id, text)
+                reply_text(reply_token, result["map"] + "\n\n" + result["message"])
 
             else:
-                reply_text(reply_token, "請輸入：\n「主選單」開啟選單\n「上/下/左/右」操作遊戲\n「前進/加速/減速」操作賽車遊戲")
+                reply_text(reply_token, "請輸入：\n「主選單」開啟選單\n「上/下/左/右」操作遊戲")
 
     return "OK", 200
 
@@ -156,7 +139,7 @@ def get_kana_table():
 
 def maze_game(user, message):
     if user not in players:
-        players[user] = {"pos": (1, 1), "quiz": None}
+        players[user] = {"pos": (1,1), "quiz": None}
 
     player = players[user]
 
@@ -192,32 +175,16 @@ def maze_game(user, message):
 
     return {"map": render_map(new_pos), "message": "你移動了，可以繼續前進"}
 
-def racing_game(user, message):
-    if user not in racers:
-        racers[user] = {"pos": 0, "target": random.choice(list(kana_dict.items())), "start_time": time.time(), "lives": 3, "score": 0}
-
-    player = racers[user]
-    race_status = player["race"]
-
-    if message == "前進":
-        player["race"] = "你在賽道上行駛中！"
-        return {"message": "🏎️ 你已經前進！"}
-
-    elif message == "加速":
-        player["race"] = "你加速了！"
-        return {"message": "⚡ 你加速了，速度更快！"}
-
-    elif message == "減速":
-        player["race"] = "你減速了！"
-        return {"message": "⚠️ 你減速了，小心！"}
-
-    return {"message": "請選擇行駛方向：「前進」、「加速」、「減速」"}
-
 def render_map(player_pos):
     result = ""
-    for y in range(6):
-        for x in range(6):
-            result += "🟩" if (y,x) == player_pos else maze[y][x]
+    for y in range(5):
+        for x in range(5):
+            if (y, x) == player_pos:
+                result += "😊"
+            elif maze[y][x] == "🧱":
+                result += "🧱"
+            else:
+                result += maze[y][x]
         result += "\n"
     return result.strip()
 
@@ -232,5 +199,3 @@ def reply_text(reply_token, text):
     }
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
-if __name__ == "__main__":
-    app.run(debug=True)
