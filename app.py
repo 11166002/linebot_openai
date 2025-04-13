@@ -1,4 +1,4 @@
-# --- 完整修正後的 LINE Bot 遊戲程式碼 v1.0 ---
+# --- 完整修正後的 LINE Bot 遊戲程式碼 v1.1 ---
 # 說明：本程式整合 LINE Flex Menu、日語五十音查詢、迷宮遊戲、賽車遊戲
 
 from flask import Flask, request, jsonify
@@ -17,7 +17,6 @@ racers = {}
 
 # 五十音對照表（節錄清音）
 kana_dict = {
-    # 清音
     "あ": "a", "い": "i", "う": "u", "え": "e", "お": "o",
     "か": "ka", "き": "ki", "く": "ku", "け": "ke", "こ": "ko",
     "さ": "sa", "し": "shi", "す": "su", "せ": "se", "そ": "so",
@@ -28,32 +27,17 @@ kana_dict = {
     "や": "ya", "ゆ": "yu", "よ": "yo",
     "ら": "ra", "り": "ri", "る": "ru", "れ": "re", "ろ": "ro",
     "わ": "wa", "を": "wo", "ん": "n",
-    # 濁音
     "が": "ga", "ぎ": "gi", "ぐ": "gu", "げ": "ge", "ご": "go",
     "ざ": "za", "じ": "ji", "ず": "zu", "ぜ": "ze", "ぞ": "zo",
     "だ": "da", "ぢ": "ji", "づ": "zu", "で": "de", "ど": "do",
     "ば": "ba", "び": "bi", "ぶ": "bu", "べ": "be", "ぼ": "bo",
-    # 半濁音
     "ぱ": "pa", "ぴ": "pi", "ぷ": "pu", "ぺ": "pe", "ぽ": "po",
-    # 拗音
-    "きゃ": "kya", "きゅ": "kyu", "きょ": "kyo",
-    "しゃ": "sha", "しゅ": "shu", "しょ": "sho",
-    "ちゃ": "cha", "ちゅ": "chu", "ちょ": "cho",
-    "にゃ": "nya", "にゅ": "nyu", "にょ": "nyo",
-    "ひゃ": "hya", "ひゅ": "hyu", "ひょ": "hyo",
-    "みゃ": "mya", "みゅ": "myu", "みょ": "myo",
-    "りゃ": "rya", "りゅ": "ryu", "りょ": "ryo",
-    "ぎゃ": "gya", "ぎゅ": "gyu", "ぎょ": "gyo",
-    "じゃ": "ja", "じゅ": "ju", "じょ": "jo",
-    "びゃ": "bya", "びゅ": "byu", "びょ": "byo",
-    "ぴゃ": "pya", "ぴゅ": "pyu", "ぴょ": "pyo"
 }
 
 # 五十音查表資料
 kana_table_rows = [
     ("あ", "ア", "a"), ("い", "イ", "i"), ("う", "ウ", "u"), ("え", "エ", "e"), ("お", "オ", "o"),
     ("か", "カ", "ka"), ("き", "キ", "ki"), ("く", "ク", "ku"), ("け", "ケ", "ke"), ("こ", "コ", "ko"),
-    ("さ", "サ", "sa"), ("し", "シ", "shi"), ("す", "ス", "su"), ("せ", "セ", "se"), ("そ", "ソ", "so")
 ]
 
 # 地圖設定
@@ -83,15 +67,8 @@ def callback():
                 reply_text(reply_token, get_kana_table())
 
             elif text == "我要玩迷宮遊戲":
-reply_text(reply_token, "🌀【迷宮遊戲說明】\n你將控制主角在迷宮中前進，通過日語五十音挑戰才能到達終點！\n⬜ 可走的路｜⬛ 牆壁｜⛩️ 終點\n請使用『上／下／左／右』來移動角色，部分格子會隨機出題！\n⚠️ 本關迷宮較複雜，請小心探索！")
-players[user_id] = {"pos": (1,1), "quiz": None}
-reply_text(reply_token, render_map((1,1)) + "
-
-🎮 遊戲開始！請輸入 上 / 下 / 左 / 右")
                 players[user_id] = {"pos": (1,1), "quiz": None}
-                reply_text(reply_token, render_map((1,1)) + "
-
-🎮 遊戲開始！請輸入 上 / 下 / 左 / 右")
+                reply_text(reply_token, render_map((1,1)) + "\n🎮 遊戲開始！請輸入 上 / 下 / 左 / 右")
 
             elif text in ["上", "下", "左", "右"]:
                 if user_id in players:
@@ -99,43 +76,13 @@ reply_text(reply_token, render_map((1,1)) + "
                     reply_text(reply_token, result["map"] + "\n\n" + result["message"])
 
             elif text == "我要玩賽車遊戲":
-                reply_text(reply_token, "🏎️【賽車遊戲說明】
-你需要在 30 秒內正確答出 8 題五十音羅馬拼音，每答對一題，賽車將向終點推進一格！
-💥 答錯會扣命，最多 3 次機會，來挑戰你的反應與記憶吧！")
-                racers[user_id] = {"pos": 0, "target": random.choice(list(kana_dict.items())), "start_time": time.time(), "lives": 3, "score": 0}
-                kana, _ = racers[user_id]["target"]
-                reply_text(reply_token, f"🏁 賽車遊戲開始！請輸入「{kana}」的羅馬拼音來推進！")
                 racers[user_id] = {"pos": 0, "target": random.choice(list(kana_dict.items())), "start_time": time.time(), "lives": 3, "score": 0}
                 kana, _ = racers[user_id]["target"]
                 reply_text(reply_token, f"🏁 賽車遊戲開始！請輸入「{kana}」的羅馬拼音來推進！")
 
             elif text.lower() in kana_dict.values() and user_id in racers:
-                racer = racers[user_id]
-                elapsed = time.time() - racer["start_time"]
-                if elapsed > 30:
-                    del racers[user_id]
-                    reply_text(reply_token, "⏰ 時間到！賽車遊戲結束！")
-                    return
-                correct = racer["target"][1]
-                if text.lower() == correct:
-                    racer["pos"] += 1
-                    racer["score"] += 10
-                    if racer["pos"] >= 8:
-                        score = racer["score"]
-                        del racers[user_id]
-                        reply_text(reply_token, f"🎉 衝線成功！得分：{score}")
-                    else:
-                        racer["target"] = random.choice(list(kana_dict.items()))
-                        next_kana = racer["target"][0]
-                        track = "🚗" + "━" * racer["pos"] + "🏁"
-                        reply_text(reply_token, f"✅ 正確！\n{track}\n下一題：「{next_kana}」的羅馬拼音是？")
-                else:
-                    racer["lives"] -= 1
-                    if racer["lives"] <= 0:
-                        del racers[user_id]
-                        reply_text(reply_token, "💥 你失去所有命，遊戲結束！")
-                    else:
-                        reply_text(reply_token, f"❌ 錯誤！剩餘命數：{racer['lives']}")
+                result = race_game(user_id, text)
+                reply_text(reply_token, result)
 
     return "OK", 200
 
@@ -198,3 +145,6 @@ def reply_text(reply_token, text):
         "messages": [{"type": "text", "text": text}]
     }
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
+
+if __name__ == "__main__":
+    app.run(debug=True)
