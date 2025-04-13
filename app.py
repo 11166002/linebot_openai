@@ -66,8 +66,7 @@ def callback():
             user_id = event["source"]["userId"]
             text = event["message"]["text"].strip()
 
-            if text == "主選單":
-                reply_text(reply_token, "請選擇：
+          
 1️⃣ 我要看五十音
 2️⃣ 我要玩迷宮遊戲
 3️⃣ 我要玩賽車遊戲
