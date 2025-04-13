@@ -72,7 +72,6 @@ for _ in range(8):
             maze[y][x] = "⬛"
             break
 
-
 start = (1,1)
 goal = (maze_size-2, maze_size-2)
 maze[goal[0]][goal[1]] = "⛩"
@@ -151,12 +150,13 @@ def maze_game(user, message):
     # 題目處理
     if player.get("quiz"):
         kana, answer, choice_map = player["quiz"]
-        if message in choice_map and choice_map[message] == answer:
+        if message.upper() in choice_map and choice_map[message.upper()] == answer:
             player["quiz"] = None
             return {"map": render_map(player["pos"]), "message": "✅ 回答正確，繼續前進！"}
         else:
-            options_text = "\n".join([f"{key}. {val}" for key, val in choice_map.items()])
-            return {"map": render_map(new_pos), "message": f"❓ 挑戰：「{kana}」的羅馬拼音是？請從下列選項選擇：\n{options_text}"}
+            options_text = "
+".join([f"{key}. {val}" for key, val in choice_map.items()])
+            return {"map": render_map(player["pos"]), "message": f"❌ 錯誤！再試一次：「{kana}」的羅馬拼音是？\n{options_text}"}
 
     # 移動處理
     direction = {"上": (-1, 0), "下": (1, 0), "左": (0, -1), "右": (0, 1)}
@@ -194,10 +194,11 @@ def maze_game(user, message):
             if distractor not in options:
                 options.append(distractor)
         random.shuffle(options)
-        choice_map = {"1": options[0], "2": options[1], "3": options[2]}
+        choice_map = {"A": options[0], "B": options[1], "C": options[2]}
         player["quiz"] = (kana, correct, choice_map)
         player["score"] = player.get("score", 0) + 1
-        options_text = "\n".join([f"{key}. {val}" for key, val in choice_map.items()])
+        options_text = "
+".join([f"{key}. {val}" for key, val in choice_map.items()])
         return {"map": render_map(new_pos), "message": f"❓ 挑戰：「{kana}」的羅馬拼音是？請從下列選項選擇：\n{options_text}"}
         return {"map": render_map(new_pos), "message": f"你移動了，可以繼續前進（得分 {player.get('score', 0)} 分）"}
 
@@ -278,7 +279,8 @@ def race_game(user):
     return render_race(player["car_pos"], kana, choice_map)
 
 def get_kana_table():
-    table = "【日語五十音對照表】"
+    table = "【日語五十音對照表】
+"
 
     groups = [
         ("清音", [
