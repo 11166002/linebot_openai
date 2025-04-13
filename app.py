@@ -9,7 +9,7 @@ import requests
 app = Flask(__name__)
 
 # LINE Token 設定
-CHANNEL_ACCESS_TOKEN = "liqx01baPcbWbRF5if7oqBsZyf2+2L0eTOwvbIJ6f2Wec6is4sVd5onjl4fQAmc4n8EuqMfo7prlaG5la6kXb/y1gWOnk8ztwjjx2ZnukQbPJQeDwwcPEdFTOGOmQ1t88bQLvgQVczlzc/S9Q/6y5gdB04t89/1O/w1cDnyilFU="
+CHANNEL_ACCESS_TOKEN = "你的 Channel Access Token"
 
 # 玩家狀態
 players = {}
@@ -64,10 +64,6 @@ maze = [
     ["⬛", "⬜", "⬜", "⬜", "⬛", "⬛", "⬛"],
     ["⬛", "⬛", "⬛", "⬛", "⬛", "⬛", "⬛"]
 ]
-    ["⬛", "⬜", "⬛", "⬜", "⬜", "⬛", "⬛"],
-    ["⬛", "⬜", "⬛", "⬛", "⬜", "⬜", "⛩️"],
-    ["⬛", "⬜", "⬜", "⬜", "⬛", "⬛", "⬛"],
-    ["⬛", "⬛", "⬛", "⬛", "⬛", "⬛", "⬛"]
 ],
     ["⬛", "⬜", "⬜", "⬜", "⬛"],
     ["⬛", "⬛", "⬜", "⬛", "⛩️"],
@@ -100,7 +96,6 @@ def callback():
 ⚠️ 本關迷宮較複雜，請小心探索！")
                 
                 players[user_id] = {"pos": (1,1), "quiz": None}
-                players[user_id] = {"pos": (1,1), "quiz": None}
                 reply_text(reply_token, render_map((1,1)) + "
 
 🎮 遊戲開始！請輸入 上 / 下 / 左 / 右")
@@ -116,7 +111,6 @@ def callback():
                 reply_text(reply_token, "🏎️【賽車遊戲說明】
 你需要在 30 秒內正確答出 8 題五十音羅馬拼音，每答對一題，賽車將向終點推進一格！
 💥 答錯會扣命，最多 3 次機會，來挑戰你的反應與記憶吧！")
-                reply_text(reply_token, "⚠️ 這是困難模式，需答對 8 題、30 秒內完成，答錯還會扣命！")
                 racers[user_id] = {"pos": 0, "target": random.choice(list(kana_dict.items())), "start_time": time.time(), "lives": 3, "score": 0}
                 kana, _ = racers[user_id]["target"]
                 reply_text(reply_token, f"🏁 賽車遊戲開始！請輸入「{kana}」的羅馬拼音來推進！")
