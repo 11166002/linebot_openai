@@ -60,12 +60,18 @@ for i in range(maze_size):
     maze[i][0] = maze[i][maze_size-1] = "⬛"
 
 # 隨機牆壁（避免蓋到起點與終點）
+start = (1, 1)
+goal = (maze_size - 2, maze_size - 2)
+maze[goal[0]][goal[1]] = "⛩"
+
+# 隨機牆壁（避免蓋到起點與終點）
 for _ in range(8):
     while True:
         y, x = random.randint(1, maze_size - 2), random.randint(1, maze_size - 2)
         if (y, x) != start and (y, x) != goal and maze[y][x] != "⬛":
             maze[y][x] = "⬛"
             break
+
 
 start = (1,1)
 goal = (maze_size-2, maze_size-2)
