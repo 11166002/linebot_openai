@@ -206,8 +206,7 @@ def render_map(player_pos):
 def render_race(pos, kana=None, options=None):
     track = ["⬜" for _ in range(10)]
     if pos >= len(track):
-        return "🏁 你贏了！賽車抵達終點！\n輸入「主選單」重新開始"
-輸入「主選單」重新開始"
+        return "🏁 你贏了！賽車抵達終點！\n輸入 '主選單' 重新開始"
     track[pos] = "🏎"
     race_line = "🚗 賽車進度：\n" + ''.join(track)
     if kana and options:
@@ -236,8 +235,8 @@ def race_game(user):
             player["last_msg"] = None
             player["last_quiz"] = None
         else:
-            return render_race(player["car_pos"], kana, choice_map) + "
-❌ 錯誤，請再試一次！"
+            return render_race(player["car_pos"], kana, choice_map) + "\n❌ 錯誤，請再試一次！"
+
 
     # 新題目
     kana, correct = random.choice(list(kana_dict.items()))
