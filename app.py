@@ -135,8 +135,7 @@ def maze_game(user, message):
             player["quiz"] = None
             return {"map": render_map(player["pos"]), "message": "✅ 回答正確，繼續前進！"}
         else:
-            options_text = "
-".join([f"{key}. {val}" for key, val in choice_map.items()])
+            options_text = "\n".join([f"{key}. {val}" for key, val in choice_map.items()])
             return {"map": render_map(player["pos"]), "message": f"❌ 錯誤！再試一次：「{kana}」的羅馬拼音是？
 {options_text}"}
 
@@ -201,8 +200,7 @@ def maze_game(user, message):
         player["score"] = player.get("score", 0) + 1  # 答對加分
         options_text = "\n".join([f"{key}. {val}" for key, val in choice_map.items()])
         return {"map": render_map(new_pos), "message": f"❓ 挑戰：「{kana}」的羅馬拼音是？請從下列選項選擇：\n{options_text}"}
-
-    return {"map": render_map(new_pos), "message": f"你移動了，可以繼續前進（得分 {player.get('score', 0)} 分）"}
+        return {"map": render_map(new_pos), "message": f"你移動了，可以繼續前進（得分 {player.get('score', 0)} 分）"}
 
 def render_map(player_pos):
     result = ""
