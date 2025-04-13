@@ -8,7 +8,10 @@ app = Flask(__name__)
 CHANNEL_ACCESS_TOKEN = "liqx01baPcbWbRF5if7oqBsZyf2+2L0eTOwvbIJ6f2Wec6is4sVd5onjl4fQAmc4n8EuqMfo7prlaG5la6kXb/y1gWOnk8ztwjjx2ZnukQbPJQeDwwcPEdFTOGOmQ1t88bQLvgQVczlzc/S9Q/6y5gdB04t89/1O/w1cDnyilFU="
 
 # ========== 五十音資料 ==========
-kana_dict = {
+kana_dict = {}
+
+# 清音
+kana_dict.update({
     "あ": "a", "い": "i", "う": "u", "え": "e", "お": "o",
     "か": "ka", "き": "ki", "く": "ku", "け": "ke", "こ": "ko",
     "さ": "sa", "し": "shi", "す": "su", "せ": "se", "そ": "so",
@@ -18,12 +21,24 @@ kana_dict = {
     "ま": "ma", "み": "mi", "む": "mu", "め": "me", "も": "mo",
     "や": "ya", "ゆ": "yu", "よ": "yo",
     "ら": "ra", "り": "ri", "る": "ru", "れ": "re", "ろ": "ro",
-    "わ": "wa", "を": "wo", "ん": "n",
+    "わ": "wa", "を": "wo", "ん": "n"
+})
+
+# 濁音
+kana_dict.update({
     "が": "ga", "ぎ": "gi", "ぐ": "gu", "げ": "ge", "ご": "go",
     "ざ": "za", "じ": "ji", "ず": "zu", "ぜ": "ze", "ぞ": "zo",
     "だ": "da", "ぢ": "ji", "づ": "zu", "で": "de", "ど": "do",
-    "ば": "ba", "び": "bi", "ぶ": "bu", "べ": "be", "ぼ": "bo",
-    "ぱ": "pa", "ぴ": "pi", "ぷ": "pu", "ぺ": "pe", "ぽ": "po",
+    "ば": "ba", "び": "bi", "ぶ": "bu", "べ": "be", "ぼ": "bo"
+})
+
+# 半濁音
+kana_dict.update({
+    "ぱ": "pa", "ぴ": "pi", "ぷ": "pu", "ぺ": "pe", "ぽ": "po"
+})
+
+# 拗音
+kana_dict.update({
     "きゃ": "kya", "きゅ": "kyu", "きょ": "kyo",
     "しゃ": "sha", "しゅ": "shu", "しょ": "sho",
     "ちゃ": "cha", "ちゅ": "chu", "ちょ": "cho",
@@ -35,7 +50,7 @@ kana_dict = {
     "じゃ": "ja", "じゅ": "ju", "じょ": "jo",
     "びゃ": "bya", "びゅ": "byu", "びょ": "byo",
     "ぴゃ": "pya", "ぴゅ": "pyu", "ぴょ": "pyo"
-}
+})
 
 # ========== 迷宮設定 ==========
 maze_size = 7
@@ -111,6 +126,23 @@ def callback():
     return "OK", 200
 
 def maze_game(user, message):
+    # 增加獎勵與陷阱
+    if user not in players:
+        players[user] = {"pos": start, "quiz": None, "game": "maze", "score": 0}
+
+    player = players[user]
+
+    # 陷阱格（倒退一步）
+    trap_positions = [(2,2), (3,3)]  # 可擴充為隨機生成
+    if player["pos"] in trap_positions:
+        y, x = player["pos"]
+        player["pos"] = (max(1, y-1), x)
+        return {"map": render_map(player["pos"]), "message": "💥 你踩到陷阱，退回一步！"}
+
+    # 獎勵格（直接跳到終點）
+    if player["pos"] == (2,5):
+        player["pos"] = goal
+        return {"map": render_map(goal), "message": "🎁 幸運！你搭上瞬移傳送門，直達終點！"}
     if user not in players:
         players[user] = {"pos": start, "quiz": None, "game": "maze"}
 
@@ -152,10 +184,11 @@ def maze_game(user, message):
         random.shuffle(options)
         choice_map = {"A": options[0], "B": options[1], "C": options[2]}
         player["quiz"] = (kana, correct, choice_map)
+        player["score"] = player.get("score", 0) + 1  # 答對加分
         options_text = "\n".join([f"{key}. {val}" for key, val in choice_map.items()])
         return {"map": render_map(new_pos), "message": f"❓ 挑戰：「{kana}」的羅馬拼音是？請從下列選項選擇：\n{options_text}"}
 
-    return {"map": render_map(new_pos), "message": "你移動了，可以繼續前進"}
+    return {"map": render_map(new_pos), "message": f"你移動了，可以繼續前進（得分 {player.get('score', 0)} 分）"}
 
 def render_map(player_pos):
     result = ""
@@ -164,24 +197,66 @@ def render_map(player_pos):
             if (y, x) == player_pos:
                 result += "😊"
             elif (y, x) == goal:
-                result += random.choice(["⛩", "✨", "💫"])
+            result += "⛩"
             else:
                 result += maze[y][x]
         result += "\n"
     return result.strip()
 
-def render_race(pos):
+def render_race(pos, kana=None, options=None):
     track = ["⬜" for _ in range(10)]
     if pos >= len(track):
-        return "🏁 你贏了！賽車抵達終點！\n輸入「主選單」重新開始"
+        return "🏁 你贏了！賽車抵達終點！
+輸入「主選單」重新開始"
     track[pos] = "🏎"
-    return "🚗 賽車進度：\n" + ''.join(track)
+    race_line = "🚗 賽車進度：
+" + ''.join(track)
+    if kana and options:
+        options_text = "
+".join([f"{key}. {val}" for key, val in options.items()])
+        return f"{race_line}
+
+❓ 請問「{kana}」的羅馬拼音是？
+{options_text}
+請輸入 A/B/C 作答。"
+    return race_line
 
 def race_game(user):
     if user not in players:
-        players[user] = {"car_pos": 0, "game": "race"}
-    players[user]["car_pos"] += 1
-    return render_race(players[user]["car_pos"])
+        players[user] = {"car_pos": 0, "game": "race", "quiz": None}
+
+    player = players[user]
+
+    # 若仍有題目等待作答
+    if player.get("quiz"):
+        kana, correct, choice_map = player["quiz"]
+        player["quiz"] = None  # 清除後立即驗證輸入
+        return render_race(player["car_pos"], kana, choice_map)
+
+    # 題目正確後才推進
+    last_msg = player.get("last_msg")
+    if last_msg in ["A", "B", "C"]:
+        kana, correct, choice_map = player["last_quiz"]
+        if choice_map.get(last_msg) == correct:
+            player["car_pos"] += 1
+            player["last_msg"] = None
+            player["last_quiz"] = None
+        else:
+            return render_race(player["car_pos"], kana, choice_map) + "
+❌ 錯誤，請再試一次！"
+
+    # 新題目
+    kana, correct = random.choice(list(kana_dict.items()))
+    options = [correct]
+    while len(options) < 3:
+        distractor = random.choice(list(kana_dict.values()))
+        if distractor not in options:
+            options.append(distractor)
+    random.shuffle(options)
+    choice_map = {"A": options[0], "B": options[1], "C": options[2]}
+    players[user]["quiz"] = (kana, correct, choice_map)
+    players[user]["last_quiz"] = (kana, correct, choice_map)
+    return render_race(player["car_pos"], kana, choice_map)
 
 def get_kana_table():
     # （保留原函數內容不變，省略重複顯示）
