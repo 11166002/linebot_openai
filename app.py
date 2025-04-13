@@ -5,7 +5,7 @@ import requests
 app = Flask(__name__)
 
 # ========== LINE Token ==========
-CHANNEL_ACCESS_TOKEN = "liqx01baPcbWbRF5if7oqBsZyf2+2L0eTOwvbIJ6f2Wec6is4sVd5onjl4fQAmc4n8EuqMfo7prlaG5la6kXb/y1gWOnk8ztwjjx2ZnukQbPJQeDwwcPEdFTOGOmQ1t88bQLvgQVczlzc/S9Q/6y5gdB04t89/1O/w1cDnyilFU="
+CHANNEL_ACCESS_TOKEN = "你的 Channel Access Token"
 
 # ========== 五十音資料 ==========
 kana_dict = {
@@ -68,23 +68,16 @@ def callback():
 
             if text == "主選單":
                 menu = (
-                    "請選擇：
-"
-                    "1. 我要看五十音
-"
-                    "2. 我要玩迷宮遊戲
-"
-                    "3. 我要玩賽車遊戲
+    "請選擇：\n"
+    "1. 我要看五十音\n"
+    "2. 我要玩迷宮遊戲\n"
+    "3. 我要玩賽車遊戲\n\n"
+    "【遊戲規則】\n"
+    "📘 看五十音：查看所有平假名、片假名與羅馬拼音對照。\n"
+    "🧩 迷宮遊戲：使用『上/下/左/右』移動角色，遇到假名選擇題時答對才能繼續。\n"
+    "🏎 賽車遊戲：每次輸入『前進』會推進一格，抵達終點即勝利！"
+)
 
-"
-                    "【遊戲規則】
-"
-                    "📘 看五十音：查看所有平假名、片假名與羅馬拼音對照。
-"
-                    "🧩 迷宮遊戲：使用『上/下/左/右』移動角色，遇到假名選擇題時答對才能繼續。
-"
-                    "🏎 賽車遊戲：每次輸入『前進』會推進一格，抵達終點即勝利！"
-                )
                 reply_text(reply_token, menu)
           
 
