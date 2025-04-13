@@ -206,19 +206,13 @@ def render_map(player_pos):
 def render_race(pos, kana=None, options=None):
     track = ["⬜" for _ in range(10)]
     if pos >= len(track):
-        return "🏁 你贏了！賽車抵達終點！
+        return "🏁 你贏了！賽車抵達終點！\n輸入「主選單」重新開始"
 輸入「主選單」重新開始"
     track[pos] = "🏎"
-    race_line = "🚗 賽車進度：
-" + ''.join(track)
+    race_line = "🚗 賽車進度：\n" + ''.join(track)
     if kana and options:
-        options_text = "
-".join([f"{key}. {val}" for key, val in options.items()])
-        return f"{race_line}
-
-❓ 請問「{kana}」的羅馬拼音是？
-{options_text}
-請輸入 A/B/C 作答。"
+        options_text = "\n".join([f"{key}. {val}" for key, val in options.items()])
+        return f"{race_line}\n\n❓ 請問「{kana}」的羅馬拼音是？\n{options_text}\n請輸入 A/B/C 作答。"
     return race_line
 
 def race_game(user):
