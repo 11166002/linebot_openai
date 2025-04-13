@@ -197,7 +197,7 @@ def render_map(player_pos):
             if (y, x) == player_pos:
                 result += "😊"
             elif (y, x) == goal:
-            result += "⛩"
+                result += "⛩"
             else:
                 result += maze[y][x]
         result += "\n"
