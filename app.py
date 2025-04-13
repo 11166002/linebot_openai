@@ -83,11 +83,7 @@ def callback():
                 reply_text(reply_token, get_kana_table())
 
             elif text == "我要玩迷宮遊戲":
-              reply_text(reply_token, "🌀【迷宮遊戲說明】
-你將控制主角在迷宮中前進，通過日語五十音挑戰才能到達終點！
-⬜ 可走的路｜⬛ 牆壁｜⛩️ 終點
-請使用『上／下／左／右』來移動角色，部分格子會隨機出題！
-⚠️ 本關迷宮較複雜，請小心探索！")
+reply_text(reply_token, "🌀【迷宮遊戲說明】\n你將控制主角在迷宮中前進，通過日語五十音挑戰才能到達終點！\n⬜ 可走的路｜⬛ 牆壁｜⛩️ 終點\n請使用『上／下／左／右』來移動角色，部分格子會隨機出題！\n⚠️ 本關迷宮較複雜，請小心探索！")
 players[user_id] = {"pos": (1,1), "quiz": None}
 reply_text(reply_token, render_map((1,1)) + "
 
