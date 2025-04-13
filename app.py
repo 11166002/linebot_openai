@@ -298,12 +298,7 @@ def get_kana_table():
     ]
 
     for title, kana_group in groups:
-        table += f"
-
-【{title}】
-"
+        table += f"【{title}】"
         for kana, roma in kana_group:
-            table += f"{kana} → {roma}
-"
-
+            table += f"{kana} → {roma}"
     return table.strip()
