@@ -312,10 +312,7 @@ def get_kana_table():
     ]
 
     for title, kana_group in groups:
-        table += f"
-
-【{title}】
-"
+        table += f"【{title}】"
     for i in range(0, len(kana_group), 5):
         row = kana_group[i:i+5]
         line = "  ".join([f"{kana} → {roma}" for kana, roma in row])
