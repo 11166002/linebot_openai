@@ -59,10 +59,13 @@ for i in range(maze_size):
     maze[0][i] = maze[maze_size-1][i] = "⬛"
     maze[i][0] = maze[i][maze_size-1] = "⬛"
 
-# 隨機牆壁
-for _ in range(15):
-    y, x = random.randint(1, maze_size-2), random.randint(1, maze_size-2)
-    maze[y][x] = "⬛"
+# 隨機牆壁（避免蓋到起點與終點）
+for _ in range(8):
+    while True:
+        y, x = random.randint(1, maze_size - 2), random.randint(1, maze_size - 2)
+        if (y, x) != start and (y, x) != goal and maze[y][x] != "⬛":
+            maze[y][x] = "⬛"
+            break
 
 start = (1,1)
 goal = (maze_size-2, maze_size-2)
@@ -142,11 +145,12 @@ def maze_game(user, message):
     # 題目處理
     if player.get("quiz"):
         kana, answer, choice_map = player["quiz"]
-        if message.upper() in choice_map and choice_map[message.upper()] == answer:
+        if message in choice_map and choice_map[message] == answer:
             player["quiz"] = None
             return {"map": render_map(player["pos"]), "message": "✅ 回答正確，繼續前進！"}
         else:
-            options_text = "\n".join([f"{key}. {val}" for key, val in choice_map.items()])
+            options_text = "
+".join([f"{key}. {val}" for key, val in choice_map.items()]))
             return {"map": render_map(player["pos"]), "message": f"❌ 錯誤！再試一次：「{kana}」的羅馬拼音是？\n{options_text}"}
 
     # 移動處理
@@ -185,7 +189,7 @@ def maze_game(user, message):
             if distractor not in options:
                 options.append(distractor)
         random.shuffle(options)
-        choice_map = {"A": options[0], "B": options[1], "C": options[2]}
+        choice_map = {"1": options[0], "2": options[1], "3": options[2]}
         player["quiz"] = (kana, correct, choice_map)
         player["score"] = player.get("score", 0) + 1
         options_text = "\n".join([f"{key}. {val}" for key, val in choice_map.items()])
@@ -269,7 +273,8 @@ def race_game(user):
     return render_race(player["car_pos"], kana, choice_map)
 
 def get_kana_table():
-    table = "【日語五十音對照表】"
+    table = "【日語五十音對照表】
+"
 
     groups = [
         ("清音", [
@@ -309,7 +314,14 @@ def get_kana_table():
     ]
 
     for title, kana_group in groups:
-        table += f"【{title}】"
-        for kana, roma in kana_group:
-            table += f"{kana} → {roma}"
+        table += f"
+
+【{title}】
+"
+    for i in range(0, len(kana_group), 5):
+        row = kana_group[i:i+5]
+        line = "  ".join([f"{kana} → {roma}" for kana, roma in row])
+        table += line + "
+"
+
     return table.strip()
