@@ -164,9 +164,7 @@ def maze_game(user, message):
 
     if new_pos == goal:
         players.pop(user)
-        return {"map": render_map(new_pos), "message": "🎉 恭喜你到達終點！遊戲完成！
-輸入「主選單」重新開始"}
-
+        return {"map": render_map(new_pos), "message": "🎉 恭喜你到達終點！遊戲完成！\n輸入 '主選單' 重新開始"}
     # 題目出題
     if new_pos in quiz_positions:
         kana, correct = random.choice(list(kana_dict.items()))
@@ -194,7 +192,7 @@ def maze_game(user, message):
             if distractor not in options:
                 options.append(distractor)
         random.shuffle(options)
-        choice_map = {"A": options[0], "B": options[1], "C": options[2]}
+        choice_map = {"1": options[0], "2": options[1], "3": options[2]}
         player["quiz"] = (kana, correct, choice_map)
         player["score"] = player.get("score", 0) + 1  # 答對加分
         options_text = "\n".join([f"{key}. {val}" for key, val in choice_map.items()])
@@ -257,7 +255,7 @@ def race_game(user):
         if distractor not in options:
             options.append(distractor)
     random.shuffle(options)
-    choice_map = {"A": options[0], "B": options[1], "C": options[2]}
+    choice_map = {"1": options[0], "2": options[1], "3": options[2]}
     players[user]["quiz"] = (kana, correct, choice_map)
     players[user]["last_quiz"] = (kana, correct, choice_map)
     return render_race(player["car_pos"], kana, choice_map)
