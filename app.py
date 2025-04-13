@@ -121,42 +121,26 @@ def callback():
                 reply_text(reply_token, result)
 
             else:
-                reply_text(reply_token, "請輸入：\n「主選單」開啟選單\n「上/下/左/右」操作遊戲")
+                reply_text(reply_token, "請輸入：\n 開啟選單\n 操作遊戲")
 
     return "OK", 200
 
 def maze_game(user, message):
-    # 增加獎勵與陷阱
-    if user not in players:
-        players[user] = {"pos": start, "quiz": None, "game": "maze", "score": 0}
+    player = players.setdefault(user, {"pos": start, "quiz": None, "game": "maze", "score": 0})
 
-    player = players[user]
-
-    # 陷阱格（倒退一步）
-    trap_positions = [(2,2), (3,3)]  # 可擴充為隨機生成
-    if player["pos"] in trap_positions:
-        y, x = player["pos"]
-        player["pos"] = (max(1, y-1), x)
-        return {"map": render_map(player["pos"]), "message": "💥 你踩到陷阱，退回一步！"}
-
-    # 獎勵格（直接跳到終點）
-    if player["pos"] == (2,5):
-        player["pos"] = goal
-        return {"map": render_map(goal), "message": "🎁 幸運！你搭上瞬移傳送門，直達終點！"}
-    if user not in players:
-        players[user] = {"pos": start, "quiz": None, "game": "maze"}
-
-    player = players[user]
-
-    if player["quiz"]:
+    # 題目處理
+    if player.get("quiz"):
         kana, answer, choice_map = player["quiz"]
         if message.upper() in choice_map and choice_map[message.upper()] == answer:
             player["quiz"] = None
             return {"map": render_map(player["pos"]), "message": "✅ 回答正確，繼續前進！"}
         else:
-            options_text = "\n".join([f"{key}. {val}" for key, val in choice_map.items()])
-            return {"map": render_map(player["pos"]), "message": f"❌ 錯誤！再試一次：「{kana}」的羅馬拼音是？\n{options_text}"}
+            options_text = "
+".join([f"{key}. {val}" for key, val in choice_map.items()])
+            return {"map": render_map(player["pos"]), "message": f"❌ 錯誤！再試一次：「{kana}」的羅馬拼音是？
+{options_text}"}
 
+    # 移動處理
     direction = {"上": (-1, 0), "下": (1, 0), "左": (0, -1), "右": (0, 1)}
     if message not in direction:
         return {"map": render_map(player["pos"]), "message": "請輸入方向：上、下、左、右"}
@@ -170,9 +154,39 @@ def maze_game(user, message):
 
     player["pos"] = new_pos
 
+    # 陷阱格（倒退一步）
+    if new_pos in [(2, 2), (3, 3)]:
+        player["pos"] = (max(1, new_pos[0] - 1), new_pos[1])
+        return {"map": render_map(player["pos"]), "message": "💥 你踩到陷阱，退回一步！"}
+
+    # 獎勵格（直接到終點）
+    if new_pos == (2, 5):
+        player["pos"] = goal
+        return {"map": render_map(goal), "message": "🎁 幸運！你搭上瞬移傳送門，直達終點！"}
+
     if new_pos == goal:
         players.pop(user)
-        return {"map": render_map(new_pos), "message": "🎉 恭喜你到達終點！遊戲完成！\n輸入「主選單」重新開始"}
+        return {"map": render_map(new_pos), "message": "🎉 恭喜你到達終點！遊戲完成！
+輸入「主選單」重新開始"}
+
+    # 題目出題
+    if new_pos in quiz_positions:
+        kana, correct = random.choice(list(kana_dict.items()))
+        options = [correct]
+        while len(options) < 3:
+            distractor = random.choice(list(kana_dict.values()))
+            if distractor not in options:
+                options.append(distractor)
+        random.shuffle(options)
+        choice_map = {"A": options[0], "B": options[1], "C": options[2]}
+        player["quiz"] = (kana, correct, choice_map)
+        player["score"] = player.get("score", 0) + 1
+        options_text = "
+".join([f"{key}. {val}" for key, val in choice_map.items()])
+        return {"map": render_map(new_pos), "message": f"❓ 挑戰：「{kana}」的羅馬拼音是？請從下列選項選擇：
+{options_text}"}
+
+    return {"map": render_map(new_pos), "message": f"你移動了，可以繼續前進（得分 {player.get('score', 0)} 分）"}
 
     if new_pos in quiz_positions:
         kana, correct = random.choice(list(kana_dict.items()))
@@ -211,7 +225,7 @@ def render_race(pos, kana=None, options=None):
     race_line = "🚗 賽車進度：\n" + ''.join(track)
     if kana and options:
         options_text = "\n".join([f"{key}. {val}" for key, val in options.items()])
-        return f"{race_line}\n\n❓ 請問「{kana}」的羅馬拼音是？\n{options_text}\n請輸入 A/B/C 作答。"
+        return f"{race_line}\n\n❓ 請問「{kana}」的羅馬拼音是？\n{options_text}\n請輸入 1/2/3 作答。"
     return race_line
 
 def race_game(user):
@@ -252,16 +266,53 @@ def race_game(user):
     return render_race(player["car_pos"], kana, choice_map)
 
 def get_kana_table():
-    # （保留原函數內容不變，省略重複顯示）
-    return "(請將這裡補上你整理好的五十音對照表內容)"
+    table = "【日語五十音對照表】
+"
 
-def reply_text(reply_token, text):
-    headers = {
-        "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    body = {
-        "replyToken": reply_token,
-        "messages": [{"type": "text", "text": text}]
-    }
-    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
+    groups = [
+        ("清音", [
+            ("あ", "a"), ("い", "i"), ("う", "u"), ("え", "e"), ("お", "o"),
+            ("か", "ka"), ("き", "ki"), ("く", "ku"), ("け", "ke"), ("こ", "ko"),
+            ("さ", "sa"), ("し", "shi"), ("す", "su"), ("せ", "se"), ("そ", "so"),
+            ("た", "ta"), ("ち", "chi"), ("つ", "tsu"), ("て", "te"), ("と", "to"),
+            ("な", "na"), ("に", "ni"), ("ぬ", "nu"), ("ね", "ne"), ("の", "no"),
+            ("は", "ha"), ("ひ", "hi"), ("ふ", "fu"), ("へ", "he"), ("ほ", "ho"),
+            ("ま", "ma"), ("み", "mi"), ("む", "mu"), ("め", "me"), ("も", "mo"),
+            ("や", "ya"), ("ゆ", "yu"), ("よ", "yo"),
+            ("ら", "ra"), ("り", "ri"), ("る", "ru"), ("れ", "re"), ("ろ", "ro"),
+            ("わ", "wa"), ("を", "wo"), ("ん", "n")
+        ]),
+        ("濁音", [
+            ("が", "ga"), ("ぎ", "gi"), ("ぐ", "gu"), ("げ", "ge"), ("ご", "go"),
+            ("ざ", "za"), ("じ", "ji"), ("ず", "zu"), ("ぜ", "ze"), ("ぞ", "zo"),
+            ("だ", "da"), ("ぢ", "ji"), ("づ", "zu"), ("で", "de"), ("ど", "do"),
+            ("ば", "ba"), ("び", "bi"), ("ぶ", "bu"), ("べ", "be"), ("ぼ", "bo")
+        ]),
+        ("半濁音", [
+            ("ぱ", "pa"), ("ぴ", "pi"), ("ぷ", "pu"), ("ぺ", "pe"), ("ぽ", "po")
+        ]),
+        ("拗音", [
+            ("きゃ", "kya"), ("きゅ", "kyu"), ("きょ", "kyo"),
+            ("しゃ", "sha"), ("しゅ", "shu"), ("しょ", "sho"),
+            ("ちゃ", "cha"), ("ちゅ", "chu"), ("ちょ", "cho"),
+            ("にゃ", "nya"), ("にゅ", "nyu"), ("にょ", "nyo"),
+            ("ひゃ", "hya"), ("ひゅ", "hyu"), ("ひょ", "hyo"),
+            ("みゃ", "mya"), ("みゅ", "myu"), ("みょ", "myo"),
+            ("りゃ", "rya"), ("りゅ", "ryu"), ("りょ", "ryo"),
+            ("ぎゃ", "gya"), ("ぎゅ", "gyu"), ("ぎょ", "gyo"),
+            ("じゃ", "ja"), ("じゅ", "ju"), ("じょ", "jo"),
+            ("びゃ", "bya"), ("びゅ", "byu"), ("びょ", "byo"),
+            ("ぴゃ", "pya"), ("ぴゅ", "pyu"), ("ぴょ", "pyo")
+        ])
+    ]
+
+    for title, kana_group in groups:
+        table += f"
+
+【{title}】
+"
+        for kana, roma in kana_group:
+            table += f"{kana} → {roma}
+"
+
+    return table.strip()
