@@ -123,7 +123,7 @@ def callback():
             else:
                 reply_text(reply_token, "訊息內容")
 
-return "OK", 200
+    return "OK", 200
 
 def reply_text(reply_token, text):
     headers = {
