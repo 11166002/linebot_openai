@@ -258,7 +258,8 @@ def race_game(user):
     return render_race(player["car_pos"], kana, choice_map)
 
 def get_kana_table():
-    table = "【日語五十音對照表】\n"
+    table = "【日語五十音對照表】
+"
 
     groups = [
         ("清音", [
