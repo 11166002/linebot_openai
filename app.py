@@ -149,7 +149,8 @@ def maze_game(user, message):
             player["quiz"] = None
             return {"map": render_map(player["pos"]), "message": "✅ 回答正確，繼續前進！"}
         else:
-            options_text = "\n".join([f"{key}. {val}" for key, val in choice_map.items()])
+            options_text = "
+".join([f"{key}. {val}" for key, val in choice_map.items()])
             return {"map": render_map(player["pos"]), "message": f"❌ 錯誤！再試一次：「{kana}」的羅馬拼音是？\n{options_text}"}
 
     # 移動處理
@@ -311,9 +312,10 @@ def get_kana_table():
         ])
     ]
 
-    for i in range(0, len(kana_group), 5):
-    row = kana_group[i:i+5]
-    line = "  ".join([f"{kana} → {roma}" for kana, roma in row])
-    table += line + "\n"
+    for title, kana_group in groups:
+        table += f"\n\n【{title}】\n"
+        for i in range(0, len(kana_group), 5):
+            row = kana_group[i:i+5]
+            line = "  ".join([f"{kana} → {roma}" for kana, roma in row])
+            table += line + "\n"
 
-    return table.strip()
