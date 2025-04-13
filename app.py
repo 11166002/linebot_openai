@@ -121,9 +121,20 @@ def callback():
                 reply_text(reply_token, result)
 
             else:
-                reply_text(reply_token, "請輸入：\n 開啟選單\n 操作遊戲")
+                reply_text(reply_token, "訊息內容")
 
-    return "OK", 200
+return "OK", 200
+
+def reply_text(reply_token, text):
+    headers = {
+        "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    body = {
+        "replyToken": reply_token,
+        "messages": [{"type": "text", "text": text}]
+    }
+    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
 def maze_game(user, message):
     player = players.setdefault(user, {"pos": start, "quiz": None, "game": "maze", "score": 0})
