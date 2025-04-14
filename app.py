@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 import random
 import requests
+import time
 
 app = Flask(__name__)
 
@@ -34,6 +35,7 @@ maze[goal[0]][goal[1]] = "⛩"
 players = {}
 quiz_positions = [(random.randint(1, maze_size-2), random.randint(1, maze_size-2)) for _ in range(5)]
 
+# ===============================
 
 @app.route("/callback", methods=["POST"])
 def callback():
@@ -49,6 +51,7 @@ def callback():
                 user_id = event["source"]["userId"]
                 text = event["message"]["text"].strip()
 
+                # 主選單處理
                 if text == "主選單":
                     menu = (
                         "請選擇：\n"
@@ -62,33 +65,35 @@ def callback():
                     )
                     reply_text(reply_token, menu)
 
+                # 顯示五十音表
                 elif text == "1" or text == "我要看五十音":
                     reply_text(reply_token, get_kana_table())
 
+                # 開始迷宮遊戲
                 elif text == "2" or text == "我要玩迷宮遊戲":
                     if user_id not in players:
                         players[user_id] = {"pos": (1, 1), "quiz": None, "game": "maze"}
                     reply_text(reply_token, render_map((1, 1)) + "\n🌟 迷宮遊戲開始！請輸入「上」「下」「左」「右」移動。")
 
+                # 開始賽車遊戲
                 elif text == "3" or text == "我要玩賽車遊戲":
                     if user_id not in players:
                         players[user_id] = {"car_pos": 0, "game": "race", "quiz": None, "last_quiz": None, "last_msg": None}
                     reply_text(reply_token, render_race(0) + "\n🏁 賽車遊戲開始！請輸入「前進」來推進你的車子。")
 
+                # 迷宮遊戲處理
                 elif user_id in players and players[user_id].get("game") == "maze" and text in ["上", "下", "左", "右"]:
                     result = maze_game(user_id, text)
                     reply_text(reply_token, result["map"] + "\n💬 " + result["message"])
 
+                # 賽車遊戲處理
                 elif user_id in players and players[user_id].get("game") == "race" and text == "前進":
                     result = race_game(user_id)  # 修正：直接呼叫 race_game 進行賽車邏輯
                     reply_text(reply_token, result)
 
+                # 預防輸入錯誤指令
                 else:
-                    reply_text(reply_token,
-                        "📢 請輸入以下指令之一：\n"
-                        "1️⃣ 『主選單』：開啟功能選單\n"
-                        "🔼 『上 / 下 / 左 / 右』：移動角色（迷宮）\n"
-                        "🏁 『前進』：推進賽車遊戲")
+                    reply_text(reply_token, "請選擇遊戲或輸入有效指令")
 
     except Exception as e:
         print(f"Error in callback: {e}")  # 顯示錯誤訊息
@@ -227,7 +232,6 @@ def race_game(user):
     players[user]["quiz"] = (kana, correct, choice_map)
     players[user]["last_quiz"] = (kana, correct, choice_map)
     return render_race(player["car_pos"], kana, choice_map)
-
 # 📘 回傳日語五十音表格式文字
 
 def get_kana_table():
