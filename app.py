@@ -131,12 +131,9 @@ def callback():
 
             else:
                 reply_text(reply_token,
-                    "📢 請輸入以下指令之一：\n"
-                    "1️⃣ 『主選單』：開啟功能選單\n"
-                    "🔼 『上 / 下 / 左 / 右』：移動角色（迷宮）\n"
-                    "🏁 『前進』：推進賽車遊戲")
-
-
+                    "📢 請輸入『主選單』")
+                    
+                    
 def reply_text(reply_token, text):
     headers = {
         "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
@@ -148,13 +145,12 @@ def reply_text(reply_token, text):
     }
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
-
 # 🧩 迷宮遊戲邏輯
 
 def maze_game(user, message):
     player = players.setdefault(user, {"pos": start, "quiz": None, "game": "maze", "score": 0})
 
-    # 如果有待回答的題目，就處理答案（答案應為 A, B, C, D 形式）
+    # 如果有待回答的題目，就處理答案（答案應為 A, B, C 形式）
     if player.get("quiz"):
         kana, answer, choice_map = player["quiz"]
         if message in choice_map and choice_map[message] == answer:
@@ -196,7 +192,7 @@ def maze_game(user, message):
             if distractor not in options:
                 options.append(distractor)
         random.shuffle(options)
-        choice_map = {"A": options[0], "B": options[1], "C": options[2]}
+        choice_map = {"A": options[0], "B": options[1], "C": options[2]}  # 選項改為 ABC
         player["quiz"] = (kana, correct, choice_map)
         player["score"] = player.get("score", 0) + 1
         options_text = "\n".join([f"{key}. {val}" for key, val in choice_map.items()])
@@ -205,31 +201,7 @@ def maze_game(user, message):
     return {"map": render_map(new_pos), "message": f"你移動了，可以繼續前進（得分 {player.get('score', 0)} 分）"}
 
 
-# 🏎 賽車遊戲邏輯
-
-def race_game(user):
-    if user not in players:
-        players[user] = {"car_pos": 0, "game": "race", "quiz": None}
-    player = players[user]
-    # 若已經有待回答的題目，直接回傳該題目
-    if player.get("quiz"):
-        kana, correct, choice_map = player["quiz"]
-        player["last_quiz"] = (kana, correct, choice_map)
-        return render_race(player["car_pos"], kana, choice_map)
-    # 沒有待回答題目則生成新題目（選項由原來的 3 個擴增為 4 個）
-    kana, correct = random.choice(list(kana_dict.items()))
-    options = [correct]
-    while len(options) < 4:
-        distractor = random.choice(list(kana_dict.values()))
-        if distractor not in options:
-            options.append(distractor)
-    random.shuffle(options)
-    choice_map = {"A": options[0], "B": options[1], "C": options[2], "D": options[3]}
-    player["quiz"] = (kana, correct, choice_map)
-    player["last_quiz"] = (kana, correct, choice_map)
-    return render_race(player["car_pos"], kana, choice_map)
-
-
+# 新增一個賽車遊戲的回答處理函式
 def race_answer(user, answer):
     player = players.get(user)
     if not player or not player.get("last_quiz"):
@@ -242,6 +214,20 @@ def race_answer(user, answer):
     else:
         return render_race(player["car_pos"], kana, choice_map) + "\n❌ 回答錯誤，請再試一次！"
 
+# 🧩 顯示迷宮地圖
+
+def render_map(player_pos):
+    result = ""
+    for y in range(maze_size):
+        for x in range(maze_size):
+            if (y, x) == player_pos:
+                result += "😊"
+            elif (y, x) == goal:
+                result += "⛩"
+            else:
+                result += maze[y][x]
+        result += "\n"
+    return result.strip()
 
 # 🏎 賽車遊戲畫面顯示
 
@@ -253,9 +239,33 @@ def render_race(pos, kana=None, options=None):
     race_line = "🚗 賽車進度：\n" + ''.join(track)
     if kana and options:
         options_text = "\n".join([f"{key}. {val}" for key, val in options.items()])
-        return f"{race_line}\n\n❓ 請問「{kana}」的羅馬拼音是？\n{options_text}\n請按按鈕作答（A/B/C/D）。"
+        return f"{race_line}\n\n❓ 請問「{kana}」的羅馬拼音是？\n{options_text}\n請按按鈕作答（A/B/C）。"
     return race_line
 
+# 🏎 賽車遊戲邏輯
+
+def race_game(user):
+    if user not in players:
+        players[user] = {"car_pos": 0, "game": "race", "quiz": None}
+    player = players[user]
+    # 若已經有待回答的題目，直接回傳該題目
+    if player.get("quiz"):
+        kana, correct, choice_map = player["quiz"]
+        # 同時將本題存入 last_quiz 以便回答使用
+        player["last_quiz"] = (kana, correct, choice_map)
+        return render_race(player["car_pos"], kana, choice_map)
+    # 沒有待回答題目則生成新題目
+    kana, correct = random.choice(list(kana_dict.items()))
+    options = [correct]
+    while len(options) < 3:
+        distractor = random.choice(list(kana_dict.values()))
+        if distractor not in options:
+            options.append(distractor)
+    random.shuffle(options)
+    choice_map = {"A": options[0], "B": options[1], "C": options[2]}
+    player["quiz"] = (kana, correct, choice_map)
+    player["last_quiz"] = (kana, correct, choice_map)
+    return render_race(player["car_pos"], kana, choice_map)
 
 # 📘 回傳日語五十音表格式文字
 
@@ -307,6 +317,3 @@ def get_kana_table():
             table += line + "\n"
 
     return table.strip()
-    
-if __name__ == "__main__":
-    app.run(debug=True)
