@@ -155,13 +155,12 @@ def maze_game(user, message):
     # 題目處理
     if player.get("quiz"):
         kana, answer, choice_map = player["quiz"]
-        if message.upper() in choice_map and choice_map[message.upper()] == answer:
-            player["quiz"] = None
-            return {"map": render_map(player["pos"]), "message": "✅ 回答正確，繼續前進！"}
-        else:
-            options_text = ".join([f"{key}. {val}" for key, val in choice_map.items()])
-            return {"map": render_map(player["pos"]), "message": f"❌ 錯誤！再試一次：「{kana}」的羅馬拼音是？{options_text}"}
-
+if message.upper() in choice_map and choice_map[message.upper()] == answer:
+    player["quiz"] = None
+    return {"map": render_map(player["pos"]), "message": "✅ 回答正確，繼續前進！"}
+else:
+    options_text = "\n".join([f"{key}. {val}" for key, val in choice_map.items()])
+    return {"map": render_map(player["pos"]),"message": f"❌ 錯誤！再試一次：「{kana}」的羅馬拼音是？\n{options_text}"}
     # 移動處理
     direction = {"上": (-1, 0), "下": (1, 0), "左": (0, -1), "右": (0, 1)}
     if message not in direction:
