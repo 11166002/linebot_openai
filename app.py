@@ -193,7 +193,6 @@ def render_race(pos, kana=None, options=None):
         options_text = "\n".join([f"{key}. {val}" for key, val in options.items()])
         return f"{race_line}\n\n❓ 請問「{kana}」的羅馬拼音是？\n{options_text}\n請輸入 A/B/C 作答。"
     return race_line
-
 # 🏎 賽車遊戲邏輯
 def race_game(user):
     player = players.get(user, {"car_pos": 0, "game": "race", "quiz": None, "last_quiz": None, "last_msg": None})
