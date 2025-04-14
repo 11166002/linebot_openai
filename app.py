@@ -86,10 +86,12 @@ def callback():
     events = body.get("events", [])
 
     for event in events:
-    if event["type"] == "message":
-        reply_token = event["replyToken"]
-        user_id = event["source"]["userId"]
-        text = event["message"]["text"].strip()
+        if event["type"] == "message":  # ← 這一行需要縮排對齊
+            reply_token = event["replyToken"]
+            user_id = event["source"]["userId"]
+            text = event["message"]["text"].strip()
+
+            # 接下來主選單、遊戲邏輯等都寫在這個 if 區塊內
         # 以下可接著處理對話內容
         if text == "主選單":
             menu = (
