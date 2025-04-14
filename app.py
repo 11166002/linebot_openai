@@ -90,7 +90,7 @@ def callback():
         reply_token = event["replyToken"]
         user_id = event["source"]["userId"]
         text = event["message"]["text"].strip()
-
+        # 以下可接著處理對話內容
         if text == "主選單":
             menu = (
                 "請選擇：\n"
