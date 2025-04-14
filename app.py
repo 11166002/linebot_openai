@@ -194,10 +194,10 @@ def maze_game(user, message):
             if distractor not in options:
                 options.append(distractor)
         random.shuffle(options)
-        choice_map = {"A": options[0], "B": options[1], "C": options[2]}
+        choice_map = {"1": options[0], "2": options[1], "3": options[2]}
         player["quiz"] = (kana, correct, choice_map)
         player["score"] = player.get("score", 0) + 1
-        options_text = ".join([f"{key}. {val}" for key, val in choice_map.items()])
+        options_text = "\n".join([f"{key}. {val}" for key, val in choice_map.items()])
         return {"map": render_map(new_pos), "message": f"❓ 挑戰：「{kana}」的羅馬拼音是？請從下列選項選擇：\n{options_text}"}
         return {"map": render_map(new_pos), "message": f"你移動了，可以繼續前進（得分 {player.get('score', 0)} 分）"}
 
@@ -209,12 +209,13 @@ def maze_game(user, message):
             if distractor not in options:
                 options.append(distractor)
         random.shuffle(options)
-        choice_map = {"A": options[0], "B": options[1], "C": options[2]}
+        choice_map = {"1": options[0], "2": options[1], "3": options[2]}
         player["quiz"] = (kana, correct, choice_map)
         player["score"] = player.get("score", 0) + 1  # 答對加分
         options_text = "\n".join([f"{key}. {val}" for key, val in choice_map.items()])
         return {"map": render_map(new_pos), "message": f"❓ 挑戰：「{kana}」的羅馬拼音是？請從下列選項選擇：\n{options_text}"}
         return {"map": render_map(new_pos), "message": f"你移動了，可以繼續前進（得分 {player.get('score', 0)} 分）"}
+
 
 # 🧩 顯示迷宮地圖
 
