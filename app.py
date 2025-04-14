@@ -59,16 +59,17 @@ for i in range(maze_size):
     maze[0][i] = maze[maze_size-1][i] = "⬛"
     maze[i][0] = maze[i][maze_size-1] = "⬛"
 
+# 固定迷宮地圖（不再隨機產生牆壁）
 start = (1, 1)
 goal = (maze_size - 2, maze_size - 2)
 maze[goal[0]][goal[1]] = "⛩"
 
-# 可以在這裡手動設計固定的牆壁（例如）
-maze[1][3] = "⬛"
-maze[2][2] = "⬛"
-maze[3][1] = "⬛"
-maze[4][3] = "⬛"
-maze[5][2] = "⬛"
+# 調整固定牆壁（改為通道以確保有通路）
+maze[1][3] = "⬜"
+maze[2][2] = "⬜"
+maze[3][1] = "⬜"
+maze[4][3] = "⬜"
+maze[5][2] = "⬜"
 
 start = (1,1)
 goal = (maze_size-2, maze_size-2)
@@ -89,47 +90,41 @@ def callback():
             text = event["message"]["text"].strip()
 
             if text == "主選單":
-                menu = (
-                    "請選擇：\n"
-                    "1. 我要看五十音\n"
-                    "2. 我要玩迷宮遊戲\n"
-                    "3. 我要玩賽車遊戲\n\n"
-                    "【遊戲規則】\n"
-                    "📘 看五十音：查看所有平假名、片假名與羅馬拼音對照。\n"
-                    "🧩 迷宮遊戲：使用『上/下/左/右』移動角色，遇到假名選擇題時答對才能繼續。\n"
-                    "🏎 賽車遊戲：每次輸入『前進』會推進一格，抵達終點即勝利！"
-                )
+                # 修改回覆為只顯示請輸入主選單並附圖示
+                menu = "✨ 請輸入【主選單】以開始遊戲 ✨"
                 reply_text(reply_token, menu)
 
             elif text == "1" or text == "我要看五十音":
                 reply_text(reply_token, get_kana_table())
 
             elif text == "2" or text == "我要玩迷宮遊戲":
-                players[user_id] = {"pos": (1, 1), "quiz": None, "game": "maze"}
+                players[user_id] = {"pos": (1, 1), "quiz": None, "game": "maze", "score": 0}
                 reply_text(reply_token, render_map((1, 1)) + "\n🌟 迷宮遊戲開始！請輸入「上」「下」「左」「右」移動。")
 
             elif text == "3" or text == "我要玩賽車遊戲":
-                players[user_id] = {"car_pos": 0, "game": "race", "quiz": None, "last_quiz": None, "last_msg": None}
-                reply_text(reply_token, render_race(0) + "\n🏁 賽車遊戲開始！請輸入「前進」來推進你的車子。")
+                players[user_id] = {"car_pos": 0, "game": "race", "quiz": None, "last_quiz": None}
+                reply_text(reply_token, render_race(0) + "\n🏁 賽車遊戲開始！請輸入「前進」來獲得題目，並用 A/B/C 選擇答案。")
 
-            elif user_id in players and players[user_id].get("game") == "maze" and text in ["上", "下", "左", "右"]:
+            # 迷宮遊戲處理
+            elif user_id in players and players[user_id].get("game") == "maze" and text in ["上", "下", "左", "右", "A", "B", "C"]:
                 result = maze_game(user_id, text)
                 reply_text(reply_token, result["map"] + "\n💬 " + result["message"])
 
-            elif user_id in players and players[user_id].get("game") == "maze" and players[user_id].get("quiz"):
-                result = maze_game(user_id, text)
-                reply_text(reply_token, result["map"] + "\n💬 " + result["message"])
+            # 賽車遊戲處理：回答題目 (A, B, C)
+            elif user_id in players and players[user_id].get("game") == "race" and text in ["A", "B", "C"]:
+                result = race_answer(user_id, text)
+                reply_text(reply_token, result)
 
+            # 賽車遊戲處理：輸入前進以獲得新題目
             elif user_id in players and players[user_id].get("game") == "race" and text == "前進":
-                result = race_game(user_id)  # 修正：直接呼叫 race_game 進行賽車邏輯
+                result = race_game(user_id)
                 reply_text(reply_token, result)
 
             else:
                 reply_text(reply_token,
-                    "📢 請輸入以下指令之一：\n"
-                    "1️⃣ 『主選單』：開啟功能選單\n"
-                    "🔼 『上 / 下 / 左 / 右』：移動角色（迷宮）\n"
-                    "🏁 『前進』：推進賽車遊戲")
+                    "📢 請輸入主選單～～：\n"
+                    "【主選單】")
+
     
 def reply_text(reply_token, text):
     headers = {
@@ -148,7 +143,7 @@ def reply_text(reply_token, text):
 def maze_game(user, message):
     player = players.setdefault(user, {"pos": start, "quiz": None, "game": "maze", "score": 0})
 
-    # 題目處理
+    # 如果有待回答的題目，就處理答案（答案應為 A, B, C 形式）
     if player.get("quiz"):
         kana, answer, choice_map = player["quiz"]
         if message in choice_map and choice_map[message] == answer:
@@ -156,13 +151,13 @@ def maze_game(user, message):
             return {"map": render_map(player["pos"]), "message": "✅ 回答正確，繼續前進！"}
         else:
             options_text = "\n".join([f"{key}. {val}" for key, val in choice_map.items()])
-            return {"map": render_map(player["pos"]), "message": f"❓ 挑戰：「{kana}」的羅馬拼音是？請從下列選項選擇：\n{options_text}"}
+            return {"map": render_map(player["pos"]), "message": f"❌ 回答錯誤，請再試一次：\n{options_text}"}
 
-    # 移動處理
+    # 否則處理移動
     direction = {"上": (-1, 0), "下": (1, 0), "左": (0, -1), "右": (0, 1)}
     if message not in direction:
         return {"map": render_map(player["pos"]), "message": "請輸入方向：上、下、左、右"}
-
+        
     dy, dx = direction[message]
     y, x = player["pos"]
     new_pos = (y + dy, x + dx)
@@ -172,7 +167,7 @@ def maze_game(user, message):
 
     player["pos"] = new_pos
 
-    # 獎勳格（直接到終點）
+    # 若到特定格子（例：(2,5)）則瞬移至終點
     if new_pos == (2, 5):
         player["pos"] = goal
         return {"map": render_map(goal), "message": "🎁 幸運！你搭上瞬移傳送門，直達終點！"}
@@ -181,7 +176,7 @@ def maze_game(user, message):
         players.pop(user)
         return {"map": render_map(new_pos), "message": "🎉 恭喜你到達終點！遊戲完成！輸入 '主選單' 重新開始"}
 
-    # 題目出題
+    # 出題：若移動到題目格
     if new_pos in quiz_positions:
         kana, correct = random.choice(list(kana_dict.items()))
         options = [correct]
@@ -194,9 +189,23 @@ def maze_game(user, message):
         player["quiz"] = (kana, correct, choice_map)
         player["score"] = player.get("score", 0) + 1
         options_text = "\n".join([f"{key}. {val}" for key, val in choice_map.items()])
-        return {"map": render_map(new_pos), "message": f"❓ 挑戰：「{kana}」的羅馬拼音是？請從下列選項選擇：\n{options_text}"}
+        return {"map": render_map(new_pos), "message": f"❓ 挑戰：「{kana}」的羅馬拼音是？\n請從下列選項點選：\n{options_text}"}
         
     return {"map": render_map(new_pos), "message": f"你移動了，可以繼續前進（得分 {player.get('score', 0)} 分）"}
+
+
+# 新增一個賽車遊戲的回答處理函式
+def race_answer(user, answer):
+    player = players.get(user)
+    if not player or not player.get("last_quiz"):
+        return "沒有待回答的題目，請輸入『前進』以獲得新題目。"
+    kana, correct, choice_map = player["last_quiz"]
+    if answer in choice_map and choice_map[answer] == correct:
+        player["car_pos"] += 1
+        player["last_quiz"] = None
+        return render_race(player["car_pos"]) + "\n✅ 回答正確，請輸入『前進』以獲得新題目！"
+    else:
+        return render_race(player["car_pos"], kana, choice_map) + "\n❌ 回答錯誤，請再試一次！"
 
 # 🧩 顯示迷宮地圖
 
@@ -223,7 +232,7 @@ def render_race(pos, kana=None, options=None):
     race_line = "🚗 賽車進度：\n" + ''.join(track)
     if kana and options:
         options_text = "\n".join([f"{key}. {val}" for key, val in options.items()])
-        return f"{race_line}\n\n❓ 請問「{kana}」的羅馬拼音是？\n{options_text}\n請輸入 A/B/C 作答。"
+        return f"{race_line}\n\n❓ 請問「{kana}」的羅馬拼音是？\n{options_text}\n請按按鈕作答（A/B/C）。"
     return race_line
 
 # 🏎 賽車遊戲邏輯
@@ -231,27 +240,14 @@ def render_race(pos, kana=None, options=None):
 def race_game(user):
     if user not in players:
         players[user] = {"car_pos": 0, "game": "race", "quiz": None}
-
     player = players[user]
-
-    # 若仍有題目等待作答
+    # 若已經有待回答的題目，直接回傳該題目
     if player.get("quiz"):
         kana, correct, choice_map = player["quiz"]
-        player["quiz"] = None  # 清除後立即驗證輸入
+        # 同時將本題存入 last_quiz 以便回答使用
+        player["last_quiz"] = (kana, correct, choice_map)
         return render_race(player["car_pos"], kana, choice_map)
-
-    # 題目正確後才推進
-    last_msg = player.get("last_msg")
-    if last_msg in ["A", "B", "C"]:
-        kana, correct, choice_map = player["last_quiz"]
-        if choice_map.get(last_msg) == correct:
-            player["car_pos"] += 1
-            player["last_msg"] = None
-            player["last_quiz"] = None
-        else:
-            return render_race(player["car_pos"], kana, choice_map) + "\n❌ 錯誤，請再試一次！"
-
-    # 新題目
+    # 沒有待回答題目則生成新題目
     kana, correct = random.choice(list(kana_dict.items()))
     options = [correct]
     while len(options) < 3:
@@ -259,9 +255,9 @@ def race_game(user):
         if distractor not in options:
             options.append(distractor)
     random.shuffle(options)
-    choice_map = {"A": options[0], "B": options[1], "C": options[2]}  # 選項改為 ABC
-    players[user]["quiz"] = (kana, correct, choice_map)
-    players[user]["last_quiz"] = (kana, correct, choice_map)
+    choice_map = {"A": options[0], "B": options[1], "C": options[2]}
+    player["quiz"] = (kana, correct, choice_map)
+    player["last_quiz"] = (kana, correct, choice_map)
     return render_race(player["car_pos"], kana, choice_map)
 
 # 📘 回傳日語五十音表格式文字
