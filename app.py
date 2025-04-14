@@ -208,6 +208,8 @@ def race_answer(user, answer):
     kana, correct, choice_map = player["last_quiz"]
     if answer in choice_map and choice_map[answer] == correct:
         player["car_pos"] += 1
+        # 清除 quiz 和 last_quiz，使每次「前進」會產生新題目
+        player["quiz"] = None
         player["last_quiz"] = None
         return render_race(player["car_pos"]) + "\n✅ 回答正確，請輸入『前進』以獲得新題目！"
     else:
