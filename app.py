@@ -80,8 +80,7 @@ def callback():
                     reply_text(reply_token, result["map"] + "\n💬 " + result["message"])
 
                 elif user_id in players and players[user_id].get("game") == "race" and text == "前進":
-                    players[user_id]["last_msg"] = "A"
-                    result = race_game(user_id)
+                    result = race_game(user_id)  # 修正：直接呼叫 race_game 進行賽車邏輯
                     reply_text(reply_token, result)
 
                 else:
@@ -194,6 +193,41 @@ def render_race(pos, kana=None, options=None):
         options_text = "\n".join([f"{key}. {val}" for key, val in options.items()])
         return f"{race_line}\n\n❓ 請問「{kana}」的羅馬拼音是？\n{options_text}\n請輸入 A/B/C 作答。"
     return race_line
+
+# 🏎 賽車遊戲邏輯
+def race_game(user):
+    player = players.get(user, {"car_pos": 0, "game": "race", "quiz": None, "last_quiz": None, "last_msg": None})
+
+    # 若仍有題目等待作答
+    if player.get("quiz"):
+        kana, correct, choice_map = player["quiz"]
+        player["quiz"] = None  # 清除後立即驗證輸入
+        return render_race(player["car_pos"], kana, choice_map)
+
+    # 題目正確後才推進
+    last_msg = player.get("last_msg")
+    if last_msg in ["A", "B", "C"]:
+        kana, correct, choice_map = player["last_quiz"]
+        if choice_map.get(last_msg) == correct:
+            player["car_pos"] += 1
+            player["last_msg"] = None
+            player["last_quiz"] = None
+        else:
+            return render_race(player["car_pos"], kana, choice_map) + "\n❌ 錯誤，請再試一次！"
+
+    # 新題目
+    kana, correct = random.choice(list(kana_dict.items()))
+    options = [correct]
+    while len(options) < 3:
+        distractor = random.choice(list(kana_dict.values()))
+        if distractor not in options:
+            options.append(distractor)
+    random.shuffle(options)
+    choice_map = {"A": options[0], "B": options[1], "C": options[2]}  # 選項改為 ABC
+    players[user]["quiz"] = (kana, correct, choice_map)
+    players[user]["last_quiz"] = (kana, correct, choice_map)
+    return render_race(player["car_pos"], kana, choice_map)
+
 # 📘 回傳日語五十音表格式文字
 
 def get_kana_table():
