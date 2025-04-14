@@ -183,8 +183,8 @@ def maze_game(user, message):
         players.pop(user)
         return {"map": render_map(new_pos), "message": "🎉 恭喜你到達終點！遊戲完成！輸入 '主選單' 重新開始"}
 
-    # 出題：若移動到題目格
-    if new_pos in quiz_positions:
+    # 出題：若移動到題目格 或 隨機觸發題目
+    if new_pos in quiz_positions or random.random() < 0.5:
         kana, correct = random.choice(list(kana_dict.items()))
         options = [correct]
         while len(options) < 3:
@@ -200,7 +200,6 @@ def maze_game(user, message):
         
     return {"map": render_map(new_pos), "message": f"你移動了，可以繼續前進（得分 {player.get('score', 0)} 分）"}
 
-
 # 新增一個賽車遊戲的回答處理函式
 def race_answer(user, answer):
     player = players.get(user)
@@ -213,7 +212,6 @@ def race_answer(user, answer):
         return render_race(player["car_pos"]) + "\n✅ 回答正確，請輸入『前進』以獲得新題目！"
     else:
         return render_race(player["car_pos"], kana, choice_map) + "\n❌ 回答錯誤，請再試一次！"
-
 # 🧩 顯示迷宮地圖
 
 def render_map(player_pos):
