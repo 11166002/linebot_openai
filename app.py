@@ -130,11 +130,8 @@ def callback():
 
             else:
                 reply_text(reply_token,
-                    "📢 請輸入以下指令之一：\n"
-                    "1️⃣ 『主選單』：開啟功能選單\n"
-                    "🔼 『上 / 下 / 左 / 右』：移動角色（迷宮）\n"
-                    "🏁 『前進』：推進賽車遊戲")
-    
+                    "📢 請輸入主選單～～：\n"
+                    
 def reply_text(reply_token, text):
     headers = {
         "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
@@ -194,7 +191,7 @@ def maze_game(user, message):
             if distractor not in options:
                 options.append(distractor)
         random.shuffle(options)
-        choice_map = {"1": options[0], "2": options[1], "3": options[2]}
+        choice_map = {"A": options[0], "B": options[1], "C": options[2]}
         player["quiz"] = (kana, correct, choice_map)
         player["score"] = player.get("score", 0) + 1
         options_text = "\n".join([f"{key}. {val}" for key, val in choice_map.items()])
@@ -209,7 +206,7 @@ def maze_game(user, message):
             if distractor not in options:
                 options.append(distractor)
         random.shuffle(options)
-        choice_map = {"1": options[0], "2": options[1], "3": options[2]}
+        choice_map = {"A": options[0], "B": options[1], "C": options[2]}
         player["quiz"] = (kana, correct, choice_map)
         player["score"] = player.get("score", 0) + 1  # 答對加分
         options_text = "\n".join([f"{key}. {val}" for key, val in choice_map.items()])
@@ -270,7 +267,6 @@ def race_game(user):
         else:
             return render_race(player["car_pos"], kana, choice_map) + "\n❌ 錯誤，請再試一次！"
 
-
     # 新題目
     kana, correct = random.choice(list(kana_dict.items()))
     options = [correct]
@@ -279,12 +275,10 @@ def race_game(user):
         if distractor not in options:
             options.append(distractor)
     random.shuffle(options)
-    choice_map = {"1": options[0], "2": options[1], "3": options[2]}
+    choice_map = {"A": options[0], "B": options[1], "C": options[2]}
     players[user]["quiz"] = (kana, correct, choice_map)
     players[user]["last_quiz"] = (kana, correct, choice_map)
     return render_race(player["car_pos"], kana, choice_map)
-
-
 # 📘 回傳日語五十音表格式文字
 
 def get_kana_table():
