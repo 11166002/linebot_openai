@@ -2,7 +2,13 @@ from flask import Flask, request, jsonify
 import random
 import requests
 
-app = Flask(__name__)
+# Flask app with static folder for audio files
+app = Flask(
+    __name__,
+    static_folder="audio_files",   # 放 .wav 檔的資料夾
+    static_url_path="/audio"      # 對外存取 URL 前綴
+)
+
 
 # ========== LINE Token ==========
 CHANNEL_ACCESS_TOKEN = "liqx01baPcbWbRF5if7oqBsZyf2+2L0eTOwvbIJ6f2Wec6is4sVd5onjl4fQAmc4n8EuqMfo7prlaG5la6kXb/y1gWOnk8ztwjjx2ZnukQbPJQeDwwcPEdFTOGOmQ1t88bQLvgQVczlzc/S9Q/6y5gdB04t89/1O/w1cDnyilFU="
@@ -51,113 +57,8 @@ kana_dict.update({
     "びゃ": "bya", "びゅ": "byu", "びょ": "byo",
     "ぴゃ": "pya", "ぴゅ": "pyu", "ぴょ": "pyo"
 })
-# 🗂️ Google Drive 上每個假名對應的 wav 檔案 ID
-drive_id_map = {
-    "あ": "1qi4Wzop1HRLWE8FjnjlmhWrdqGYf0TK-",
-    "い": "1eX0J_ldzEauj5grZV3jwIzbwXc7l3IFO",
-    "う": "1ozopveWMLTMCh6Q_0uihsD3EY8h33Wi2",
-    "え": "1J_8BTJY286TvlMPDyc00JJjLOcUdO-F8",
-    "お": "12zRNRLqYCScM3owUtbx_NdaIUWq3nxv8",
-    "か": "1cpkpwUA3EKUwg3ff5dtUlhIBGQ3Ri_G6",
-    "き": "150y2HczafC98V8ZFzMRdFTmxr9gBiDEs",
-    "く": "148R19RHjkGAW1_v5-FUWVbAigPtpTleI",
-    "け": "12WzgxO4mvRUgOjlKN4rkRw2hFFGIlfkV",
-    "ご": "1EbRiYyIK3FGPWx1qU63onjKTEa-g4fYV",
-    "さ": "1YFO-4r1aFkEbFd5n37P2h27P_gxivlGq",
-    "し": "1eNMA7xWimCIU-7ZHvNBc-rEdpt2Nbvrs",
-    "す": "1QcS1Rl5iNzc4sa6uuINDE3XJwjtA5w1N",
-    "せ": "19-70aawFvx_zdoCy-_T3PwtYic-MAkgb",
-    "そ": "1K6Wau-46t4BtvyJ2JmmcxeYh2QCBkKxN",
-    "た": "1oD_f1Gi3XgLXM1pzpU9s84-jpyOweDQp",
-    "ち": "152U6CtisRiCnY78A-HF5f-tINb_LYc3l",
-    "つ": "1osc7jbJyXk0pYZjPuf-Cz-jVP7v6xV7x",
-    "て": "1XdYElCzgV_LA_hH0yaQ1CadCp922K-Su",
-    "と": "1YlMWEbKolZmdawNpTtLgvby9-3FSBO2_",
-    "な": "19LBSd66HIvhuSvSVNfEEONI0cIGL209U",
-    "に": "1fjtO7SZDFtD8osDyvUX-zP0yEYeds9OF",
-    "ぬ": "1LjpZeqqcg_anMEMopzCYvcW5wc8vmge6",
-    "ね": "1T6Lr5tjUASlWwLFnN54pNOrBpVr3N0vR",
-    "の": "/1mMA0hXj27IXelm6CACEktCr_aGQ8lzAk",
-    "は": "1p6dB2lKBs8MngdYpdk57ZHTuKWyrE0_S",
-    "ひ": "1psHEgqDoNRt9mmh40a2PVR5IikZcK5xj",
-    "ふ": "1pz2VJlPfHDjjHcBc-Ml0OolSD3TEDHi1",
-    "へ": "13TawhJjTGHaVq8B0GNUki6RLA8gp2yvH",
-    "ほ": "1rFVzOgkWSFGAsN2SGohxiAsLfgMkGvE4",
-    "ま": "1snNBXy5oF0o0Xde-5VANQ6CVo_LRz3m5",
-    "み": "1QNNSN5HVMjipchSNWcI3lDvIt_8YFGrC",
-    "む": "1TRporMnQ92xvh4yajTbG6GDV_yVdsc1B",
-    "め": "132gLQohNFoGLR7AaXRQ8BMdQh-CYu9XE",
-    "も": "1fksuYLiUdylSCfD6jpRGOJFGfGcxK-IY",
-    "や": "1fnPI9F4mCrrMC8K6ECpDF_77qUQsI9f9",
-    "ゆ": "1jGqYQRN5xyLrBxUjV6L19mFhYr4cwB7p",
-    "よ": "107NNSlo6e_ICVZggfELjyM0fWmPIQh1a",
-    "ら": "1HRAQE2JKLSb65V4iYDEoIREnJRCcyBDa",
-    "り": "1GkBHQW1qlCBJ-I6A5l7zdGsSU-EDXKGJ",
-    "る": "12iTRAHlqa7bAstZvd3SIDx8m0UFZTvHn",
-    "れ": "1m9vGxYBBRFIUXFuhifubjcP1LRPgRcgD",
-    "ろ": "1708ZKi4NuJ5FqEbvPSOO0NGtaKwqNi4b",
-    "わ": "1bHCK_-Dy4jgSPubuKY0bELQFRL4o0BtP",
-    "を": "1obNR12X5MJ_oeYZJ22wKcyLS649k_BiY",
-    "ん": "1uIye20OkRPZa1ORTTOTlLt8l-mo2oeQt",
-    "が": "1SqwccSBNanU4wM1WCWBHC2fCPRO2BeKj",
-    "ぎ": "1ZLmV8Cp9DCsW2mwSpafud8SxemOl3dGI",
-    "ぐ": "1galHzibMoBD_1-7lol-X3v6RdgItV7va",
-    "げ": "1P6gWAveVjvQYXlqP6zkX3VigLlWtBaus",
-    "ご": "1AwsBODN-b3ohQTa5IXlcz7m6LuZCr7bG",
-    "ざ": "13AbnN93UNaYo2p-VgjTPXFOcCXxkTxWv",
-    "じ": "1Uy8l3McuZzO1S9VHz-J74xvOnWRe0wFa",
-    "ず": "1P_FvoO29rCNFUVNRuhnvGpPmRIsG6HG1",
-    "ぜ": "1QflPrMIsDAJ4zMBaitjxuSWZy8Fux3rx",
-    "ぞ": "1Ke7vqUC9wrOgbeHQZnRe0KuI60mTOTEw",
-    "だ": "15ob36UFyftU-ezXoBDqBnAFR-TcZJAdJ",
-    "ぢ": "1_BXLlwznWPPGyv8RBPjEV8EWHLLoxCLv",
-    "づ": "1E78D2C-c2RofmvLRJ_cVANyiFdzwg9cI",
-    "で": "1Ej9-VvnuJbWaq4JLOiSrbOHKvFsoIXy_",
-    "ど": "19PeLfmuH7qL6_GuMsu0CQMs60ZO7LIPp",
-    "ば": "1eJFvDdvF2i13kY5W1e8KGfUJuPV8ECM5",
-    "び": "1_gA_KSuCYuHqtuA3OYWjJNN4rEagmHO8",
-    "ぶ": "175HFQBnnM796yVpxppc1msYxf7OrLPz4",
-    "べ": "1beQ9FQSBAz8BNRi0AF1f5KQ7kJCmJ46N",
-    "ぼ": "1iUa3-ZGIAK6N6gl3IBP_ytcDYyIAJMXj",
-    "ぱ": "1r9MXpT9dATwF92d3Ro2Go0lXnZoQdbmy",
-    "ぴ": "1gWa_ViuSQdt-I54YlvtCddKG5YCFecp5",
-    "ぷ": "1gyN7Q4R6HOg47wiQC03yAvMH-UZVXv5E",
-    "ぺ": "1UyJ4lY9ksuxvjWPGeCthoCz0BqMyJMDz",
-    "ぽ": "1ptJwP7vQoRaKGfYPOgat4jvvD70GvRYA",
-    "きゃ": "1e57n2CV5fCkKc34ONvbEd1M2brrjhwmU",
-    "きゅ": "1MRRkxD5zHQs9F9oVhrHqtzUihOLSf9oY",
-    "きょ": "1MRRkxD5zHQs9F9oVhrHqtzUihOLSf9oY",
-    "きょ": "1i0IBUfjfwlSEUv1RQKckfL194duLrXWt",
-    "しゅ": "1NgKQbeeKKlHgVgzE01pVQPYchj2qAmZC",
-    "しょ": "1hEcVh2lQ03dEl5ATPrkKPfsfSXwz9xf2",
-    "ちゃ": "1ZwfAypRnMdTVyc_3qNeYWZb-VhWfyxdP",
-    "ちゅ": "1dMMdnyrgzEiWN-5i9CTg1ljgyeZ5Km9g",
-    "ちょ": "1kBQEngw3OmSuo9MzKc2TlaKGNw6mOWBk",
-    "にゃ": "1gPeJTMKvLwkxNtWWRKp_QxuI1fWW04nO",
-    "にゅ": "1Dgy_P4ymNhTFJp_72VcdZNPHXvWYGTLR",
-    "にょ": "1JgA1TjMsfJGC6hql0IXIthvWV1hUBdAU",
-    "ひゃ": "1WqtE3CKpxt8C1UwHyamSMrqAd-PSZ2--",
-    "ひゅ": "1ozTIBG3KrWuzE0h9zNhbd2_Da40VRyl3",
-    "ひょ": "1yeaXAZeP_Z-CGBbxiEwDKeIKS0CopXWZ",
-    "みゃ": "1wftleVz4Ix7hMpf-P5lqH9gKa_TI3m1M",
-    "みゅ": "1jvUAZ-SZPrRgghFT1E8DbWvovq_5wPFX",
-    "みょ": "1o9GxhW5PY7O9S7gv9pRPBkkrl0h_LqGB",
-    "りゃ": "1Vsg5bkwHO5cwYQYmNqKmUnkJ4O21e1ic",
-    "りゅ": "1NAfzk-UNCfFK9HP-8Mh1vZCr3-JJYjeA",
-    "りょ": "1cNDGNPWTb-sKof9gZ8_uCUOA_ACJWH9e",
-    "ぎゃ": "1fQfxlHNv99sLWe766Ce7zU5S1U0DHbcQ",
-    "ぎゅ": "1y3rTFVQ9mOoDy4JNjeBnepGzbbhkpMmE",
-    "ぎょ": "1hq45WmBWVHBZRuit6wYdgWqnex03FCEe",
-    "じゃ": "1ov7ewK6oZe0Z81USn7yPm7B7JqZJd5Zs",
-    "じゅ": "16WXjWe020dDBocrb_k5oXOTQxhaxU9Za",
-    "じょ": "1vgrPLWRUnZBG8qFxBDe8reBbktitthXA",
-    "びゃ": "1Ch2fIayAchl4PfNdIPzsQwHaWf-i1dUh",
-    "びゅ": "1UDod8vJ6ae2-Fgje0T8b44SXJqCwUmX8",
-    "びょ": "1VCbp8goKIHCafK6gCNigg1279fEff5W0",    
-    "ぴゃ": "14g-BBfkzrwl44GG7VGrVvKw9spyMjqyr",
-    "ぴゅ": "1FWC5qSuuMm6krNtk9YpjpNH8priBMmgQ",
-    # … 其他假名依序填上
-}
+
+
 # ========== 🧩 迷宮遊戲設定（迷宮地圖生成、陷阱與題目） ==========
 maze_size = 7
 maze = [["⬜" for _ in range(maze_size)] for _ in range(maze_size)]
@@ -200,30 +101,70 @@ dart_sessions = {}
 
 @app.route("/callback", methods=["POST"])
 def callback():
-    body = request.get_json()
-    events = body.get("events", [])
+    data = request.get_json()
+    events = data.get("events", [])
 
     for event in events:
-        if event["type"] == "message":
+        if event.get("type") == "message":
             reply_token = event["replyToken"]
-            user_id = event["source"]["userId"]
             text = event["message"]["text"].strip()
 
             if text == "主選單":
                 menu = (
                     "請選擇：\n"
                     "1. 我要看五十音\n"
-                    "2. 我要玩迷宮遊戲\n"
-                    "3. 我要玩賽車遊戲\n"
-                    "4. 我要玩射飛鏢 進階篇\n"
-                    "5. 我要填問卷～\n\n"
-                    "【遊戲規則】\n"
-                    "📘 看五十音：查看所有平假名、片假名與羅馬拼音對照。\n"
-                    "🧩 迷宮遊戲：使用『上/下/左/右』移動角色，遇到假名選擇題時答對才能繼續。\n"
-                    "🏎 賽車遊戲：每次輸入『前進』會推進一格，抵達終點即勝利！\n"
-                    "🎯 射飛鏢遊戲：隨機射中一個日文單字（含中文意義），請選出正確的羅馬拼音，答對即命中！"
+                    "2. 我要聽音檔\n"
+                    "3. 我要玩迷宮遊戲\n"
+                    "4. 我要玩賽車遊戲\n"
+                    "5. 我要玩射飛鏢\n"
+                    "6. 我要填問卷～"
                 )
                 reply_text(reply_token, menu)
+
+            # --- 2. 我要聽音檔 ---
+            elif text == "2" or text == "我要聽音檔":
+                # 預設播放前五個假名的音檔
+                kana_list = ["あ", "い", "う", "え", "お"]
+                messages = []
+                for kana in kana_list:
+                    audio_url = f"{request.url_root.rstrip('/')}/audio/{kana}.wav"
+                    messages.append({
+                        "type": "audio",
+                        "originalContentUrl": audio_url,
+                        "duration": 1500
+                    })
+                headers = {
+                    "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
+                    "Content-Type": "application/json"
+                }
+                payload = {"replyToken": reply_token, "messages": messages}
+                requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=payload)
+
+            # --- 其他功能分支略（請保留原本邏輯） ---
+            elif text == "1" or text == "我要看五十音":
+                reply_text(reply_token, get_kana_table())
+            elif text in ["3", "我要玩迷宮遊戲"]:
+                # 迷宮遊戲邏輯
+                pass
+            elif text in ["4", "我要玩賽車遊戲"]:
+                # 賽車遊戲邏輯
+                pass
+            elif text in ["5", "我要玩射飛鏢"]:
+                # 射飛鏢遊戲邏輯
+                pass
+            elif text in ["6", "我要填問卷～"]:
+                reply_text(reply_token, "📋 請點擊填寫： https://forms.gle/...")
+            else:
+                reply_text(reply_token, "📢 請輸入『主選單』重新開始。")
+
+# 回覆文字函式
+def reply_text(token, text):
+    headers = {"Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}", "Content-Type": "application/json"}
+    body = {"replyToken": token, "messages": [{"type": "text", "text": text}]}
+    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
+
+if __name__ == "__main__":
+    app.run(debug=True)
 
             elif text == "1" or text == "我要看五十音":
                 reply_text(reply_token, get_kana_table())
