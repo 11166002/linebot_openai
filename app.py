@@ -77,6 +77,21 @@ maze[goal[0]][goal[1]] = "⛩"
 players = {}
 quiz_positions = [(random.randint(1, maze_size-2), random.randint(1, maze_size-2)) for _ in range(5)]
 
+# 🏹 射飛鏢遊戲資料
+dart_words = {
+    "みず": "mizu",         # 水
+    "たべる": "taberu",     # 吃
+    "のむ": "nomu",         # 喝
+    "いく": "iku",          # 去
+    "くるま": "kuruma",     # 車
+    "ともだち": "tomodachi", # 朋友
+    "せんせい": "sensei",    # 老師
+    "ほん": "hon",          # 書
+    "いぬ": "inu",          # 狗
+    "ねこ": "neko"          # 貓
+}
+dart_sessions = {}
+
 
 @app.route("/callback", methods=["POST"])
 def callback():
@@ -95,11 +110,13 @@ def callback():
                     "1. 我要看五十音\n"
                     "2. 我要玩迷宮遊戲\n"
                     "3. 我要玩賽車遊戲\n"
-                    "4. 我要填問卷～\n\n"
+                    "4. 我要玩射飛鏢\n"
+                    "5. 我要填問卷～\n\n"
                     "【遊戲規則】\n"
                     "📘 看五十音：查看所有平假名、片假名與羅馬拼音對照。\n"
                     "🧩 迷宮遊戲：使用『上/下/左/右』移動角色，遇到假名選擇題時答對才能繼續。\n"
-                    "🏎 賽車遊戲：每次輸入『前進』會推進一格，抵達終點即勝利！"
+                    "🏎 賽車遊戲：每次輸入『前進』會推進一格，抵達終點即勝利！\n"
+                    "🎯 射飛鏢遊戲：隨機射中一個日文單字，請選出正確的羅馬拼音，答對即命中！"
                 )
                 reply_text(reply_token, menu)
 
@@ -114,7 +131,32 @@ def callback():
                 players[user_id] = {"car_pos": 0, "game": "race", "quiz": None, "last_quiz": None, "last_msg": None}
                 reply_text(reply_token, render_race(0) + "\n🏁 賽車遊戲開始！請輸入「前進」來推進你的車子。")
 
-            elif text == "4" or text == "我要填問卷～":
+            elif text == "4" or text == "我要玩射飛鏢":
+                # 射飛鏢遊戲開始
+                word, romaji = random.choice(list(dart_words.items()))
+                options = [romaji]
+                while len(options) < 3:
+                    distractor = random.choice(list(dart_words.values()))
+                    if distractor not in options:
+                        options.append(distractor)
+                random.shuffle(options)
+                dart_sessions[user_id] = {"word": word, "answer": romaji, "options": options}
+                choice_map = {"A": options[0], "B": options[1], "C": options[2]}
+                dart_sessions[user_id]["choice_map"] = choice_map
+                choices_text = "\n".join([f"{k}. {v}" for k, v in choice_map.items()])
+                reply_text(reply_token, f"🎯 射飛鏢結果：你射中了「{word}」！請選出正確的羅馬拼音：\n{choices_text}")
+
+            elif user_id in dart_sessions and text in ["A", "B", "C"]:
+                # 處理射飛鏢答案
+                session = dart_sessions[user_id]
+                if session["choice_map"][text] == session["answer"]:
+                    del dart_sessions[user_id]
+                    reply_text(reply_token, "🎯 命中！答對了！")
+                else:
+                    choices_text = "\n".join([f"{k}. {v}" for k, v in session["choice_map"].items()])
+                    reply_text(reply_token, f"❌ 沒射中，再試一次！請選出「{session['word']}」的正確羅馬拼音：\n{choices_text}")
+
+            elif text == "5" or text == "我要填問卷～":
                 reply_text(reply_token, "📋 請點選以下連結填寫問卷：\nhttps://forms.gle/w5GNDJ7PY9uWTpsG6")
 
             elif user_id in players and players[user_id].get("game") == "maze" and text in ["上", "下", "左", "右"]:
@@ -137,6 +179,74 @@ def callback():
                 reply_text(reply_token,
                     "📢 請輸入『主選單』")
                     
+                    
+def reply_text(reply_token, text):
+    headers = {
+        "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    body = {
+        "replyToken": reply_token,
+        "messages": [{"type": "text", "text": text}]
+    }
+    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
+
+# 🧩 迷宮遊戲邏輯
+
+def maze_game(user, message):
+    player = players.setdefault(user, {"pos": start, "quiz": None, "game": "maze", "score": 0})
+
+    # 如果有待回答的題目，就處理答案（答案應為 A, B, C 形式）
+    if player.get("quiz"):
+        kana, answer, choice_map = player["quiz"]
+        if message in choice_map and choice_map[message] == answer:
+            player["quiz"] = None
+            return {"map": render_map(player["pos"]), "message": "✅ 回答正確，繼續前進！"}
+        else:
+            options_text = "\n".join([f"{key}. {val}" for key, val in choice_map.items()])
+            return {"map": render_map(player["pos"]), "message": f"❌ 回答錯誤，請再試一次：\n{options_text}"}
+
+    # 否則處理移動
+    direction = {"上": (-1, 0), "下": (1, 0), "左": (0, -1), "右": (0, 1)}
+    if message not in direction:
+        return {"map": render_map(player["pos"]), "message": "請輸入方向：上、下、左、右"}
+        
+    dy, dx = direction[message]
+    y, x = player["pos"]
+    new_pos = (y + dy, x + dx)
+
+    if not (0 <= new_pos[0] < maze_size and 0 <= new_pos[1] < maze_size) or maze[new_pos[0]][new_pos[1]] == "⬛":
+        return {"map": render_map(player["pos"]), "message": "🚧 前方是牆，不能走喔！"}
+
+    player["pos"] = new_pos
+
+    # 若到特定格子（例：(2,5)）則瞬移至終點
+    if new_pos == (2, 5):
+        player["pos"] = goal
+        return {"map": render_map(goal), "message": "🎁 幸運！你搭上瞬移傳送門，直達終點！"}
+
+    if new_pos == goal:
+        players.pop(user)
+        return {"map": render_map(new_pos), "message": "🎉 恭喜你到達終點！遊戲完成！輸入 '主選單' 重新開始"}
+
+    # 出題：若移動到題目格 或 隨機觸發題目
+    if new_pos in quiz_positions or random.random() < 0.5:
+        kana, correct = random.choice(list(kana_dict.items()))
+        options = [correct]
+        while len(options) < 3:
+            distractor = random.choice(list(kana_dict.values()))
+            if distractor not in options:
+                options.append(distractor)
+        random.shuffle(options)
+        choice_map = {"A": options[0], "B": options[1], "C": options[2]}
+        player["quiz"] = (kana, correct, choice_map)
+        player["score"] = player.get("score", 0) + 1
+        options_text = "\n".join([f"{key}. {val}" for key, val in choice_map.items()])
+        return {"map": render_map(new_pos), "message": f"❓ 挑戰：「{kana}」的羅馬拼音是？\n請從下列選項點選：\n{options_text}"}
+        
+    return {"map": render_map(new_pos), "message": f"你移動了，可以繼續前進（得分 {player.get('score', 0)} 分）"}
+
+
                     
 def reply_text(reply_token, text):
     headers = {
