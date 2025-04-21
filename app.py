@@ -141,8 +141,8 @@ def callback():
                     "messages": [
                         {
                             "type": "image",
-                            "originalContentUrl": "https://imgur.com/a/bKWK8fr",
-                            "previewImageUrl": "https://imgur.com/a/bKWK8fr"
+                            "originalContentUrl": "https://i.imgur.com/5F3fhhn.png",
+                            "previewImageUrl": "https://i.imgur.com/5F3fhhn.png"
                         },
                         {
                             "type": "text",
