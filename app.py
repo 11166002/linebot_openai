@@ -399,19 +399,30 @@ def maze_game(user, message):
         players.pop(user)
         return {"map": render_map(new_pos), "message": "🎉 恭喜你到達終點！遊戲完成！輸入 '主選單' 重新開始"}
     if new_pos in quiz_positions or random.random() < 0.5:
-    kana, correct = random.choice(list(kana_dict.items()))
-    …  # 產生 choice_map（同原本）
-    options_text = "\n".join([f"{k}. {v}" for k, v in choice_map.items()])
+        # 隨機挑假名
+        kana, correct = random.choice(list(kana_dict.items()))
 
-    # ← 加這兩行：自動組出下載直鏈
-    file_id   = drive_id_map.get(kana)
-    audio_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+        # 產生三個選項
+        options = [correct]
+        while len(options) < 3:
+            distractor = random.choice(list(kana_dict.values()))
+            if distractor not in options:
+                options.append(distractor)
+        random.shuffle(options)
+        choice_map = {"A": options[0], "B": options[1], "C": options[2]}
 
-    return {
-        "map":    render_map(new_pos),
-        "message": f"❓ 挑戰：「{kana}」的羅馬拼音是？\n{options_text}",
-        "audio":  audio_url
-    }
+        # 選項文字
+        options_text = "\n".join([f"{k}. {v}" for k, v in choice_map.items()])
+
+        # Google Drive 下載直鏈
+        file_id   = drive_id_map.get(kana)
+        audio_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+
+        return {
+            "map":     render_map(new_pos),
+            "message": f"❓ 挑戰：「{kana}」的羅馬拼音是？\n{options_text}",
+            "audio":   audio_url
+        }
     return {"map": render_map(new_pos), "message": f"你移動了，可以繼續前進（得分 {player.get('score', 0)} 分）"}
     # 🧩 迷宮遊戲邏輯
 
