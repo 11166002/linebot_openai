@@ -356,6 +356,32 @@ def render_map(player_pos):
         result += "\n"
     return result.strip()
 
+# 新增一個賽車遊戲的回答處理函式
+def race_answer(user, answer):
+    player = players.get(user)
+    if not player or not player.get("last_quiz"):
+        return "沒有待回答的題目，請輸入『前進』以獲得新題目。"
+    kana, correct, choice_map = player["last_quiz"]
+    if answer in choice_map and choice_map[answer] == correct:
+        player["car_pos"] += 1
+        # 清除 quiz 和 last_quiz，使每次「前進」會產生新題目
+        player["quiz"] = None
+        player["last_quiz"] = None
+        return render_race(player["car_pos"]) + "\n✅ 回答正確，請輸入『前進』以獲得新題目！"
+    else:
+        return render_race(player["car_pos"], kana, choice_map) + "\n❌ 回答錯誤，請再試一次！"
+# 🏎 賽車遊戲畫面顯示
+
+def render_race(pos, kana=None, options=None):
+    track = ["⬜" for _ in range(10)]
+    if pos >= len(track):
+        return "🏁 你贏了！賽車抵達終點！\n輸入 '主選單' 重新開始"
+    track[pos] = "🏎"
+    race_line = "🚗 賽車進度：\n" + ''.join(track)
+    if kana and options:
+        options_text = "\n".join([f"{key}. {val}" for key, val in options.items()])
+        return f"{race_line}\n\n❓ 請問「{kana}」的羅馬拼音是？\n{options_text}\n請按按鈕作答（A/B/C）。"
+    return race_line
 
 # 🏎 賽車遊戲回答處理
 def race_answer(user, answer):
