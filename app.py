@@ -131,7 +131,24 @@ def callback():
                 reply_text(reply_token, render_race(0) + "\n🏁 賽車遊戲開始！請輸入「前進」來推進你的車子。")
 
             elif text == "4" or text == "我要玩射飛鏢":
-                # 發送情境圖與題目說明
+                # --- 先隨機選單字並產生選項、記錄 session ---
+                word, (romaji, meaning) = random.choice(list(dart_words.items()))
+                options = [romaji]
+                while len(options) < 3:
+                    distractor = random.choice([v[0] for v in dart_words.values()])
+                    if distractor not in options:
+                        options.append(distractor)
+                random.shuffle(options)
+                choice_map = {"A": options[0], "B": options[1], "C": options[2]}
+                dart_sessions[user_id] = {
+                    "word": word,
+                    "meaning": meaning,
+                    "answer": romaji,
+                    "choice_map": choice_map
+                }
+                choices_text = "\n".join([f"{k}. {v}" for k, v in choice_map.items()])
+
+                # --- 一次回覆三則訊息：圖片、情境、遊戲題目 ---
                 headers = {
                     "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
                     "Content-Type": "application/json"
@@ -141,21 +158,27 @@ def callback():
                     "messages": [
                         {
                             "type": "image",
-                            "originalContentUrl": "https://i.imgur.com/5F3fhhn.png",
-                            "previewImageUrl": "https://i.imgur.com/5F3fhhn.png"
+                            "originalContentUrl": "https://i.imgur.com/AbCdEfG.png",
+                            "previewImageUrl":  "https://i.imgur.com/AbCdEfG.png"
                         },
                         {
                             "type": "text",
                             "text": (
                                 "🎯 情境題：你來到熱鬧的日式祭典射飛鏢攤位，"
                                 "眼前的靶子上印有日語單字與其中文意義，"
-                                "請射中一個單字後，選出正確的羅馬拼音！"
+                                "請射中一個單字後，選出其正確的羅馬拼音！"
+                            )
+                        },
+                        {
+                            "type": "text",
+                            "text": (
+                                f"🎯 射飛鏢結果：你射中了「{word}（{meaning}）」！\n"
+                                f"請選出正確的羅馬拼音：\n{choices_text}"
                             )
                         }
                     ]
                 }
                 requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
-
                 # 射飛鏢遊戲開始
                 word, (romaji, meaning) = random.choice(list(dart_words.items()))
                 options = [romaji]
