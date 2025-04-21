@@ -2,13 +2,7 @@ from flask import Flask, request, jsonify
 import random
 import requests
 
-# Flask app with static folder for audio files
-app = Flask(
-    __name__,
-    static_folder="audio_files",   # 放 .wav 檔的資料夾
-    static_url_path="/audio"      # 對外存取 URL 前綴
-)
-
+app = Flask(__name__)
 
 # ========== LINE Token ==========
 CHANNEL_ACCESS_TOKEN = "liqx01baPcbWbRF5if7oqBsZyf2+2L0eTOwvbIJ6f2Wec6is4sVd5onjl4fQAmc4n8EuqMfo7prlaG5la6kXb/y1gWOnk8ztwjjx2ZnukQbPJQeDwwcPEdFTOGOmQ1t88bQLvgQVczlzc/S9Q/6y5gdB04t89/1O/w1cDnyilFU="
@@ -58,7 +52,6 @@ kana_dict.update({
     "ぴゃ": "pya", "ぴゅ": "pyu", "ぴょ": "pyo"
 })
 
-
 # ========== 🧩 迷宮遊戲設定（迷宮地圖生成、陷阱與題目） ==========
 maze_size = 7
 maze = [["⬜" for _ in range(maze_size)] for _ in range(maze_size)]
@@ -101,70 +94,30 @@ dart_sessions = {}
 
 @app.route("/callback", methods=["POST"])
 def callback():
-    data = request.get_json()
-    events = data.get("events", [])
+    body = request.get_json()
+    events = body.get("events", [])
 
     for event in events:
-        if event.get("type") == "message":
+        if event["type"] == "message":
             reply_token = event["replyToken"]
+            user_id = event["source"]["userId"]
             text = event["message"]["text"].strip()
 
             if text == "主選單":
                 menu = (
                     "請選擇：\n"
                     "1. 我要看五十音\n"
-                    "2. 我要聽音檔\n"
-                    "3. 我要玩迷宮遊戲\n"
-                    "4. 我要玩賽車遊戲\n"
-                    "5. 我要玩射飛鏢\n"
-                    "6. 我要填問卷～"
+                    "2. 我要玩迷宮遊戲\n"
+                    "3. 我要玩賽車遊戲\n"
+                    "4. 我要玩射飛鏢 進階篇\n"
+                    "5. 我要填問卷～\n\n"
+                    "【遊戲規則】\n"
+                    "📘 看五十音：查看所有平假名、片假名與羅馬拼音對照。\n"
+                    "🧩 迷宮遊戲：使用『上/下/左/右』移動角色，遇到假名選擇題時答對才能繼續。\n"
+                    "🏎 賽車遊戲：每次輸入『前進』會推進一格，抵達終點即勝利！\n"
+                    "🎯 射飛鏢遊戲：隨機射中一個日文單字（含中文意義），請選出正確的羅馬拼音，答對即命中！"
                 )
                 reply_text(reply_token, menu)
-
-            # --- 2. 我要聽音檔 ---
-            elif text == "2" or text == "我要聽音檔":
-                # 預設播放前五個假名的音檔
-                kana_list = ["あ", "い", "う", "え", "お"]
-                messages = []
-                for kana in kana_list:
-                    audio_url = f"{request.url_root.rstrip('/')}/audio/{kana}.wav"
-                    messages.append({
-                        "type": "audio",
-                        "originalContentUrl": audio_url,
-                        "duration": 1500
-                    })
-                headers = {
-                    "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
-                    "Content-Type": "application/json"
-                }
-                payload = {"replyToken": reply_token, "messages": messages}
-                requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=payload)
-
-            # --- 其他功能分支略（請保留原本邏輯） ---
-            elif text == "1" or text == "我要看五十音":
-                reply_text(reply_token, get_kana_table())
-            elif text in ["3", "我要玩迷宮遊戲"]:
-                # 迷宮遊戲邏輯
-                pass
-            elif text in ["4", "我要玩賽車遊戲"]:
-                # 賽車遊戲邏輯
-                pass
-            elif text in ["5", "我要玩射飛鏢"]:
-                # 射飛鏢遊戲邏輯
-                pass
-            elif text in ["6", "我要填問卷～"]:
-                reply_text(reply_token, "📋 請點擊填寫： https://forms.gle/...")
-            else:
-                reply_text(reply_token, "📢 請輸入『主選單』重新開始。")
-
-# 回覆文字函式
-def reply_text(token, text):
-    headers = {"Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}", "Content-Type": "application/json"}
-    body = {"replyToken": token, "messages": [{"type": "text", "text": text}]}
-    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
-
-if __name__ == "__main__":
-    app.run(debug=True)
 
             elif text == "1" or text == "我要看五十音":
                 reply_text(reply_token, get_kana_table())
@@ -259,31 +212,10 @@ if __name__ == "__main__":
 
             elif text == "5" or text == "我要填問卷～":
                 reply_text(reply_token, "📋 請點選以下連結填寫問卷：\nhttps://forms.gle/w5GNDJ7PY9uWTpsG6")
-            elif user_id in players and players[user_id].get("game") == "maze" and text in ["上","下","左","右"]:
-                result = maze_game(user_id, text)
-                if result.get("audio + text"):
-                    headers = {
-                        "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
-                        "Content-Type":    "application/json"
-                    }
-                    body = {
-                        "replyToken": reply_token,
-                        "messages": [
-                            {
-                                "type":               "audio",
-                                "originalContentUrl": result["audio"],
-                                "duration":           1500
-                            },
-                            {
-                                "type": "text",
-                                "text": result["map"] + "\n💬 " + result["message"]
-                            }
-                        ]
-                    }
-                    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
-                else:
-                    reply_text(reply_token, result["map"] + "\n💬 " + result["message"])
 
+            elif user_id in players and players[user_id].get("game") == "maze" and text in ["上", "下", "左", "右"]:
+                result = maze_game(user_id, text)
+                reply_text(reply_token, result["map"] + "\n💬 " + result["message"])
 
             elif user_id in players and players[user_id].get("game") == "maze" and players[user_id].get("quiz"):
                 result = maze_game(user_id, text)
@@ -340,10 +272,7 @@ def maze_game(user, message):
         players.pop(user)
         return {"map": render_map(new_pos), "message": "🎉 恭喜你到達終點！遊戲完成！輸入 '主選單' 重新開始"}
     if new_pos in quiz_positions or random.random() < 0.5:
-        # 隨機挑假名
         kana, correct = random.choice(list(kana_dict.items()))
-
-        # 產生三個選項
         options = [correct]
         while len(options) < 3:
             distractor = random.choice(list(kana_dict.values()))
@@ -351,19 +280,10 @@ def maze_game(user, message):
                 options.append(distractor)
         random.shuffle(options)
         choice_map = {"A": options[0], "B": options[1], "C": options[2]}
-
-        # 選項文字
-        options_text = "\n".join([f"{k}. {v}" for k, v in choice_map.items()])
-
-        # Google Drive 下載直鏈
-        file_id   = drive_id_map.get(kana)
-        audio_url = f"https://drive.google.com/uc?export=download&id={file_id}"
-
-        return {
-            "map":     render_map(new_pos),
-            "message": f"❓ 挑戰：「{kana}」的羅馬拼音是？\n{options_text}",
-            "audio":   audio_url
-        }
+        player["quiz"] = (kana, correct, choice_map)
+        player["score"] = player.get("score", 0) + 1
+        options_text = "\n".join([f"{key}. {val}" for key, val in choice_map.items()])
+        return {"map": render_map(new_pos), "message": f"❓ 挑戰：「{kana}」的羅馬拼音是？\n請從下列選項點選：\n{options_text}"}
     return {"map": render_map(new_pos), "message": f"你移動了，可以繼續前進（得分 {player.get('score', 0)} 分）"}
     # 🧩 迷宮遊戲邏輯
 
