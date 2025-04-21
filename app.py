@@ -94,7 +94,8 @@ def callback():
                     "請選擇：\n"
                     "1. 我要看五十音\n"
                     "2. 我要玩迷宮遊戲\n"
-                    "3. 我要玩賽車遊戲\n\n"
+                    "3. 我要玩賽車遊戲\n"
+                    "4. 我要填問卷～\n\n"
                     "【遊戲規則】\n"
                     "📘 看五十音：查看所有平假名、片假名與羅馬拼音對照。\n"
                     "🧩 迷宮遊戲：使用『上/下/左/右』移動角色，遇到假名選擇題時答對才能繼續。\n"
@@ -112,6 +113,9 @@ def callback():
             elif text == "3" or text == "我要玩賽車遊戲":
                 players[user_id] = {"car_pos": 0, "game": "race", "quiz": None, "last_quiz": None, "last_msg": None}
                 reply_text(reply_token, render_race(0) + "\n🏁 賽車遊戲開始！請輸入「前進」來推進你的車子。")
+
+            elif text == "4" or text == "我要填問卷～":
+                reply_text(reply_token, "📋 請點選以下連結填寫問卷：\nhttps://forms.gle/w5GNDJ7PY9uWTpsG6")
 
             elif user_id in players and players[user_id].get("game") == "maze" and text in ["上", "下", "左", "右"]:
                 result = maze_game(user_id, text)
@@ -192,7 +196,7 @@ def maze_game(user, message):
             if distractor not in options:
                 options.append(distractor)
         random.shuffle(options)
-        choice_map = {"A": options[0], "B": options[1], "C": options[2]}  # 選項改為 ABC
+        choice_map = {"A": options[0], "B": options[1], "C": options[2]}
         player["quiz"] = (kana, correct, choice_map)
         player["score"] = player.get("score", 0) + 1
         options_text = "\n".join([f"{key}. {val}" for key, val in choice_map.items()])
