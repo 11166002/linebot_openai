@@ -125,21 +125,20 @@ def callback():
                 reply_text(reply_token, get_kana_table())
 
             elif text == "2" or text == "我要聽音檔":
-                # 🔊 播放 GitHub 上的音檔（七海(女性)69.wav）
+            # 🔊 隨機播放五十音音檔
+                urls = [
+                    "https://raw.githubusercontent.com/11166002/audio-files/main/七海(女性)13.wav",
+                    "https://raw.githubusercontent.com/11166002/audio-files/main/七海(女性)15.wav",
+                    "https://raw.githubusercontent.com/11166002/audio-files/main/七海(女性)37.wav",
+                    "https://raw.githubusercontent.com/11166002/audio-files/main/七海(女性)40.wav",
+                    "https://raw.githubusercontent.com/11166002/audio-files/main/七海(女性)57.wav"
+                ] 
+                selected_url = random.choice(urls)
                 reply_audio(
                     reply_token,
-                    original_content_url="https://raw.githubusercontent.com/11166002/audio-files/main/七海(女性)69.wav",
+                    original_content_url=selected_url,
                     duration=2000
                 )
-
-            elif text == "播放2":
-                # 🔊 播放 GitHub 上的音檔（七海(女性)65.wav）
-                reply_audio(
-                    reply_token,
-                    original_content_url="https://raw.githubusercontent.com/11166002/audio-files/main/七海(女性)65.wav",
-                    duration=2000
-                )
-            
             elif text == "3" or text == "我要玩迷宮遊戲":
                 players[user_id] = {"pos": (1, 1), "quiz": None, "game": "maze", "score": 0}
                 reply_text(reply_token, render_map((1, 1)) + "\n🌟 迷宮遊戲開始！請輸入「上」「下」「左」「右」移動。")
@@ -252,18 +251,14 @@ def callback():
                     "📢 請輸入『主選單』")
 
 
-def reply_audio(reply_token, original_content_url, duration):
+def reply_text(reply_token, text):
     headers = {
         "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
         "Content-Type": "application/json"
     }
     body = {
         "replyToken": reply_token,
-        "messages": [{
-            "type": "audio",
-            "originalContentUrl": original_content_url,
-            "duration": duration
-        }]
+        "messages": [{"type": "text", "text": text}]
     }
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
