@@ -52,15 +52,6 @@ kana_dict.update({
     "ぴゃ": "pya", "ぴゅ": "pyu", "ぴょ": "pyo"
 })
 
-
-# ========== 🗂️ 聲音檔 ID 列表 ==========
-audio_ids = [
-    "1fjtO7SZDFtD8osDyvUX-zP0yEYeds9OF",
-    "1fnPI9F4mCrrMC8K6ECpDF_77qUQsI9f9",
-    "1uIye20OkRPZa1ORTTOTlLt8l-mo2oeQt",
-    "1uIye20OkRPZa1ORTTOTlLt8l-mo2oeQt",
-    "1uIye20OkRPZa1ORTTOTlLt8l-mo2oeQt"
-]
 # ========== 🧩 迷宮遊戲設定（迷宮地圖生成、陷阱與題目） ==========
 maze_size = 7
 maze = [["⬜" for _ in range(maze_size)] for _ in range(maze_size)]
@@ -115,49 +106,39 @@ def callback():
             if text == "主選單":
                 menu = (
                     "請選擇：\n"
-                    "📘 1. 我要看五十音\n"
-                    "🎧 2. 我要聽音檔\n"
-                    "🧩 3. 我要玩迷宮遊戲\n"
-                    "🏎 4. 我要玩賽車遊戲\n"
-                    "🎯 5. 我要玩射飛鏢 進階篇\n"
-                    "📋 6. 我要填問卷～\n\n"
+                    "1. 我要看五十音\n"
+                    "2. 我要看影片\n"
+                    "3. 我要玩迷宮遊戲\n"
+                    "4. 我要玩賽車遊戲\n"
+                    "5. 我要玩射飛鏢 進階篇\n"
+                    "6. 我要填問卷～\n\n"
                     "【遊戲規則】\n"
                     "📘 看五十音：查看所有平假名、片假名與羅馬拼音對照。\n"
+                    "🎬 看影片：播放示範教學影片。\n"
                     "🧩 迷宮遊戲：使用『上/下/左/右』移動角色，遇到假名選擇題時答對才能繼續。\n"
                     "🏎 賽車遊戲：每次輸入『前進』會推進一格，抵達終點即勝利！\n"
-                    "🎯 射飛鏢遊戲：隨機射中一個日文單字（含中文意義），請選出正確的羅馬拼音！"
+                    "🎯 射飛鏢：隨機射中一個日文單字，選出正確的羅馬拼音！"
                 )
                 reply_text(reply_token, menu)
 
-            elif text in ("1", "我要看五十音"):
+            elif text == "1" or text == "我要看五十音":
                 reply_text(reply_token, get_kana_table())
 
-            elif text in ("2", "我要聽音檔"):
-                # 依序回傳五個聲音檔
-                headers = {
-                    "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
-                    "Content-Type": "application/json"
-                }
-                messages = []
-                for fid in audio_ids:
-                    url = f"https://drive.google.com/uc?export=download&id={fid}"
-                    messages.append({
-                        "type": "audio",
-                        "originalContentUrl": url,
-                        "duration": 1500
-                    })
-                body = {
-                    "replyToken": reply_token,
-                    "messages": messages
-                }
-                requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
+            
+            elif text == "2" or text == "我要聽音檔":
+                # 🔊  回傳 Google Drive 裡的教學影片資料夾連結
+                reply_text(
+                    reply_token,
+                    "🎧 點擊下方連結觀看示範影片：\n"
+                    "https://drive.google.com/drive/folders/1nyl9SNbwd9rze3w9eLl5yCviKW54Ic9w?usp=drive_link"
+                )                
 
-            elif text in ("3", "我要玩迷宮遊戲"):
+            elif text == "3" or text == "我要玩迷宮遊戲":
                 players[user_id] = {"pos": (1, 1), "quiz": None, "game": "maze", "score": 0}
                 reply_text(reply_token, render_map((1, 1)) + "\n🌟 迷宮遊戲開始！請輸入「上」「下」「左」「右」移動。")
 
-            elif text in ("4", "我要玩賽車遊戲"):
-                players[user_id] = {"car_pos": 0, "game": "race", "quiz": None, "last_quiz": None}
+            elif text == "4" or text == "我要玩賽車遊戲":
+                players[user_id] = {"car_pos": 0, "game": "race", "quiz": None, "last_quiz": None, "last_msg": None}
                 reply_text(reply_token, render_race(0) + "\n🏁 賽車遊戲開始！請輸入「前進」來推進你的車子。")
 
             elif text == "5" or text == "我要玩射飛鏢":
