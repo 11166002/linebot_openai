@@ -219,9 +219,7 @@ def callback():
                 ok = handle_answer(reply_token, user_id, text) # 判斷是否為正在答題
                 if not ok:
                     reply_text(reply_token, "請先輸入 2 開始題目，再回覆 A / B / C 作答")
-            else:
-                reply_text(reply_token, "請輸入『主選單』返回選單")
-           
+
             elif text == "3" or text == "我要玩迷宮遊戲":
                 players[user_id] = {"pos": (1, 1), "quiz": None, "game": "maze", "score": 0}
                 reply_text(reply_token, render_map((1, 1)) + "\n🌟 迷宮遊戲開始！請輸入「上」「下」「左」「右」移動。")
@@ -229,6 +227,7 @@ def callback():
             elif text == "4" or text == "我要玩賽車遊戲":
                 players[user_id] = {"car_pos": 0, "game": "race", "quiz": None, "last_quiz": None, "last_msg": None}
                 reply_text(reply_token, render_race(0) + "\n🏁 賽車遊戲開始！請輸入「前進」來推進你的車子。")
+
 
             elif text == "5" or text == "我要玩射飛鏢":
                 # --- 先隨機選單字並產生選項、記錄 session ---
