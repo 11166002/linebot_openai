@@ -51,6 +51,42 @@ kana_dict.update({
     "びゃ": "bya", "びゅ": "byu", "びょ": "byo",
     "ぴゃ": "pya", "ぴゅ": "pyu", "ぴょ": "pyo"
 })
+# ========== 回傳純文字訊息 ==========
+def reply_text(reply_token, text):
+    headers = {
+        "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    body = {
+        "replyToken": reply_token,
+        "messages": [{"type": "text", "text": text}]
+    }
+    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
+
+# ========== 回傳音檔 ==========
+def reply_audio(reply_token, original_content_url, duration):
+    headers = {
+        "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    body = {
+        "replyToken": reply_token,
+        "messages": [{
+            "type": "audio",
+            "originalContentUrl": original_content_url,
+            "duration": duration
+        }]
+    }
+    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
+
+# ========== 音檔清單 ==========
+audio_files = [
+    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)13.wav",
+    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)15.wav",
+    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)37.wav",
+    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)40.wav",
+    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)57.wav"
+]
 
 # ========== 🧩 迷宮遊戲設定（迷宮地圖生成、陷阱與題目） ==========
 maze_size = 7
@@ -125,20 +161,9 @@ def callback():
                 reply_text(reply_token, get_kana_table())
 
             elif text == "2" or text == "我要聽音檔":
-            # 🔊 隨機播放五十音音檔
-                urls = [
-                    "https://raw.githubusercontent.com/11166002/audio-files/main/七海(女性)13.wav",
-                    "https://raw.githubusercontent.com/11166002/audio-files/main/七海(女性)15.wav",
-                    "https://raw.githubusercontent.com/11166002/audio-files/main/七海(女性)37.wav",
-                    "https://raw.githubusercontent.com/11166002/audio-files/main/七海(女性)40.wav",
-                    "https://raw.githubusercontent.com/11166002/audio-files/main/七海(女性)57.wav"
-                ] 
-                selected_url = random.choice(urls)
-                reply_audio(
-                    reply_token,
-                    original_content_url=selected_url,
-                    duration=2000
-                )
+                random_audio = random.choice(audio_files)
+                reply_audio(reply_token, original_content_url=random_audio, duration=2000)
+
             elif text == "3" or text == "我要玩迷宮遊戲":
                 players[user_id] = {"pos": (1, 1), "quiz": None, "game": "maze", "score": 0}
                 reply_text(reply_token, render_map((1, 1)) + "\n🌟 迷宮遊戲開始！請輸入「上」「下」「左」「右」移動。")
