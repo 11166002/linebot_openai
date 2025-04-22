@@ -51,18 +51,6 @@ kana_dict.update({
     "びゃ": "bya", "びゅ": "byu", "びょ": "byo",
     "ぴゃ": "pya", "ぴゅ": "pyu", "ぴょ": "pyo"
 })
-# ========== 回傳純文字訊息 ==========
-def reply_text(reply_token, text):
-    headers = {
-        "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    body = {
-        "replyToken": reply_token,
-        "messages": [{"type": "text", "text": text}]
-    }
-    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
-
 # ========== 回傳音檔 ==========
 def reply_audio(reply_token, original_content_url, duration):
     headers = {
@@ -94,7 +82,7 @@ def reply_text_audio(reply_token, text, original_content_url, duration):
     }
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
-# ========== 音檔清單（對應假名 + 音檔 URL） ==========
+# ========== 音檔清單（假名 + 對應音檔 URL） ==========
 audio_files = [
     ("あ", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)13.wav"),
     ("い", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)15.wav"),
@@ -154,6 +142,7 @@ def callback():
     for event in events:
         if event["type"] == "message":
             reply_token = event["replyToken"]
+            user_id = event["source"]["userId"]
             text = event["message"]["text"].strip()
 
             if text == "主選單":
