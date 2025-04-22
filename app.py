@@ -79,13 +79,13 @@ def reply_audio(reply_token, original_content_url, duration):
     }
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
-# ========== 音檔清單 ==========
+# ========== 音檔清單（對應假名 + 音檔 URL） ==========
 audio_files = [
-    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)13.wav",
-    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)15.wav",
-    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)37.wav",
-    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)40.wav",
-    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)57.wav"
+    ("あ", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)13.wav"),
+    ("い", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)15.wav"),
+    ("う", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)37.wav"),
+    ("え", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)40.wav"),
+    ("お", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)57.wav")
 ]
 
 # ========== 🧩 迷宮遊戲設定（迷宮地圖生成、陷阱與題目） ==========
@@ -161,8 +161,9 @@ def callback():
                 reply_text(reply_token, get_kana_table())
 
             elif text == "2" or text == "我要聽音檔":
-                random_audio = random.choice(audio_files)
-                reply_audio(reply_token, original_content_url=random_audio, duration=2000)
+                kana, audio_url = random.choice(audio_files)
+                reply_text(reply_token, f"🔊 現在播放：{kana} 的發音")
+                reply_audio(reply_token, original_content_url=audio_url, duration=2000)
 
             elif text == "3" or text == "我要玩迷宮遊戲":
                 players[user_id] = {"pos": (1, 1), "quiz": None, "game": "maze", "score": 0}
