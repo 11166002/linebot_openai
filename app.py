@@ -51,7 +51,7 @@ kana_dict.update({
     "びゃ": "bya", "びゅ": "byu", "びょ": "byo",
     "ぴゃ": "pya", "ぴゅ": "pyu", "ぴょ": "pyo"
 })
-# ========== 回傳純文字訊息 ==========
+# =========  回傳純文字  =========
 def reply_text(reply_token, text):
     headers = {
         "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
@@ -61,26 +61,11 @@ def reply_text(reply_token, text):
         "replyToken": reply_token,
         "messages": [{"type": "text", "text": text}]
     }
-    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
+    requests.post("https://api.line.me/v2/bot/message/reply",
+                  headers=headers, json=body)
 
-# ========== 回傳音檔 ==========
-def reply_audio(reply_token, original_content_url, duration):
-    headers = {
-        "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    body = {
-        "replyToken": reply_token,
-        "messages": [{
-            "type": "audio",
-            "originalContentUrl": original_content_url,
-            "duration": duration
-        }]
-    }
-    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
-
-# ========= 回傳「文字 + 音檔」(一次用同一 replyToken) ==========
-def reply_text_audio(reply_token, kana, original_content_url, duration):
+# =========  回傳「文字 ➜ 音檔」(Method 1)  =========
+def reply_text_and_audio(reply_token, jp_text, original_content_url, duration):
     headers = {
         "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
         "Content-Type": "application/json"
@@ -88,36 +73,45 @@ def reply_text_audio(reply_token, kana, original_content_url, duration):
     body = {
         "replyToken": reply_token,
         "messages": [
-            {"type": "text", "text": f"🔊 現在播放：{kana} 的發音"},
-            {"type": "audio", "originalContentUrl": original_content_url, "duration": duration}
+            {"type": "text", "text": jp_text},               # ❶ 先傳日文
+            {
+                "type": "audio",                             # ❷ 再傳音檔
+                "originalContentUrl": original_content_url,
+                "duration": duration                         # 毫秒
+            }
         ]
     }
-    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
+    requests.post("https://api.line.me/v2/bot/message/reply",
+                  headers=headers, json=body)
 
-# ========= 回傳「文字 + 音檔」(一次用掉同一個 replyToken) ==========
-def reply_text_audio(reply_token, text, original_content_url, duration):
-    headers = {
-        "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
-        "Content-Type": "application/json"
+# =========  音檔清單 (Method 3)  =========
+audio_items = [
+    {
+        "jp": "こ",
+        "url": "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)13.wav",
+        "duration": 2300   # ⇦ 毫秒 (2.3 秒) ─ 視音檔長度調整
+    },
+    {
+        "jp": "う",
+        "url": "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)15.wav",
+        "duration": 2200
+    },
+    {
+        "jp": "ま",
+        "url": "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)37.wav",
+        "duration": 3300
+    },
+    {
+        "jp": "さ",
+        "url": "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)40.wav",
+        "duration": 2500
+    },
+    {
+        "jp": "ん",
+        "url": "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)57.wav",
+        "duration": 2100
     }
-    body = {
-        "replyToken": reply_token,
-        "messages": [
-            {"type": "text", "text": text},
-            {"type": "audio", "originalContentUrl": original_content_url, "duration": duration}
-        ]
-    }
-    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
-
-# ========== 音檔清單（假名 + 音檔 URL） ==========
-audio_files = [
-    ("あ", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)13.wav"),
-    ("い", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)15.wav"),
-    ("う", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)37.wav"),
-    ("え", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)40.wav"),
-    ("お", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)57.wav")
 ]
-
 # ========== 🧩 迷宮遊戲設定（迷宮地圖生成、陷阱與題目） ==========
 maze_size = 7
 maze = [["⬜" for _ in range(maze_size)] for _ in range(maze_size)]
