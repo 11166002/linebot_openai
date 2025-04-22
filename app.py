@@ -3,7 +3,7 @@ import random
 import requests
 
 app = Flask(__name__)
-ffmpeg -i 13.wav -c:a aac -b:a 128k 13.m4a
+
 # ========== LINE Token ==========
 CHANNEL_ACCESS_TOKEN = "liqx01baPcbWbRF5if7oqBsZyf2+2L0eTOwvbIJ6f2Wec6is4sVd5onjl4fQAmc4n8EuqMfo7prlaG5la6kXb/y1gWOnk8ztwjjx2ZnukQbPJQeDwwcPEdFTOGOmQ1t88bQLvgQVczlzc/S9Q/6y5gdB04t89/1O/w1cDnyilFU="
 
@@ -79,76 +79,14 @@ def reply_audio(reply_token, original_content_url, duration):
     }
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
-# ========== 轉好的音檔 (m4a / mp3) ==========
+# ========== 音檔清單 ==========
 audio_files = [
-    # 例：你用 ffmpeg 轉好的 m4a 放在同一個 GitHub repo
-    "https://raw.githubusercontent.com/11166002/audio-files/main/13.m4a",
-    "https://raw.githubusercontent.com/11166002/audio-files/main/15.m4a",
-    "https://raw.githubusercontent.com/11166002/audio-files/main/37.m4a",
-    "https://raw.githubusercontent.com/11166002/audio-files/main/40.m4a",
-    "https://raw.githubusercontent.com/11166002/audio-files/main/57.m4a"
+    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)13.wav",
+    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)15.wav",
+    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)37.wav",
+    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)40.wav",
+    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)57.wav"
 ]
-
-# ==========  對應時長 (毫秒) ==========
-# 重新用 ffmpeg -i file.m4a 讀秒數 ×1000；以下僅範例
-durations = [
-    2100,  # 13.m4a  (2.1s)
-    2000,  # 15.m4a
-    3200,  # 37.m4a
-    2400,  # 40.m4a
-    2050   # 57.m4a
-]
-
-# ========== 日文字清單（與音檔一一對應） ==========
-jp_texts = [
-    "こんにちは",
-    "おはよう",
-    "ありがとうございます",
-    "さようなら",
-    "すみません"
-]
-
-# ========== 音檔時長（ms，與音檔一一對應） ==========
-durations = [
-    2300,  # 13.wav
-    2200,  # 15.wav
-    3300,  # 37.wav
-    2500,  # 40.wav
-    2100   # 57.wav
-]
-
-# ========== 隨機傳送日文＋對應音檔 ==========
-def send_random_audio(reply_token):
-    idx = random.randrange(len(audio_files))
-    reply_text(reply_token, jp_texts[idx])                # 先傳日文
-    reply_audio(reply_token, audio_files[idx], durations[idx])  # 再傳音檔
-
-# ==========  選擇題狀態暫存  ==========
-# key = user_id
-# value = {"A": idx0, "B": idx1, "C": idx2}
-quiz_pool = {}
-
-# ==========  傳送選擇題 (A/B/C) ==========
-def send_quiz(reply_token, user_id):
-    idxs = random.sample(range(len(audio_files)), 3)         # 抽 3 句
-    options = ["A", "B", "C"]
-    mapping = dict(zip(options, idxs))                       # 建立對照
-    quiz_pool[user_id] = mapping                             # 暫存使用者題目
-    lines = [f"{opt}. {jp_texts[i]}" for opt, i in mapping.items()]
-    msg = "請選擇正確的讀音（回覆 A / B / C）：\n" + "\n".join(lines)
-    reply_text(reply_token, msg)
-
-# ==========  處理使用者回答 (A/B/C) ==========
-def handle_answer(reply_token, user_id, user_msg):
-    user_msg = user_msg.strip().upper()
-    mapping = quiz_pool.get(user_id)
-    if not mapping or user_msg not in mapping:
-        return False
-    idx = mapping[user_msg]
-    reply_text(reply_token, f"正確答案：{jp_texts[idx]}")
-    reply_audio(reply_token, audio_files[idx], durations[idx])
-    del quiz_pool[user_id]
-    return True
 
 # ========== 🧩 迷宮遊戲設定（迷宮地圖生成、陷阱與題目） ==========
 maze_size = 7
@@ -190,7 +128,6 @@ dart_words = {
 }
 dart_sessions = {}
 
-# ==========  LINE callback ==========
 @app.route("/callback", methods=["POST"])
 def callback():
     body = request.get_json()
@@ -224,12 +161,8 @@ def callback():
                 reply_text(reply_token, get_kana_table())
 
             elif text == "2" or text == "我要聽音檔":
-                send_quiz(reply_token, user_id)                # 顯示 A/B/C 選擇題
-
-            elif text.upper() in ["A", "B", "C"]:
-                ok = handle_answer(reply_token, user_id, text) # 判斷是否為正在答題
-                if not ok:
-                    reply_text(reply_token, "請先輸入 2 開始題目，再回覆 A / B / C 作答")
+                random_audio = random.choice(audio_files)
+                reply_audio(reply_token, original_content_url=random_audio, duration=2000)
 
             elif text == "3" or text == "我要玩迷宮遊戲":
                 players[user_id] = {"pos": (1, 1), "quiz": None, "game": "maze", "score": 0}
@@ -238,7 +171,6 @@ def callback():
             elif text == "4" or text == "我要玩賽車遊戲":
                 players[user_id] = {"car_pos": 0, "game": "race", "quiz": None, "last_quiz": None, "last_msg": None}
                 reply_text(reply_token, render_race(0) + "\n🏁 賽車遊戲開始！請輸入「前進」來推進你的車子。")
-
 
             elif text == "5" or text == "我要玩射飛鏢":
                 # --- 先隨機選單字並產生選項、記錄 session ---
