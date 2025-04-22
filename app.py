@@ -79,6 +79,21 @@ def reply_audio(reply_token, original_content_url, duration):
     }
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
+# ========= 回傳「文字 + 音檔」(一次用掉同一個 replyToken) ==========
+def reply_text_audio(reply_token, text, original_content_url, duration):
+    headers = {
+        "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    body = {
+        "replyToken": reply_token,
+        "messages": [
+            {"type": "text", "text": text},
+            {"type": "audio", "originalContentUrl": original_content_url, "duration": duration}
+        ]
+    }
+    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
+
 # ========== 音檔清單（對應假名 + 音檔 URL） ==========
 audio_files = [
     ("あ", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)13.wav"),
@@ -87,6 +102,9 @@ audio_files = [
     ("え", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)40.wav"),
     ("お", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)57.wav")
 ]
+
+# ========== 遊戲用的玩家與問題設定等省略，保留原邏輯 ==========
+# 可接續你原有的 maze_game, race_game 等函數
 
 # ========== 🧩 迷宮遊戲設定（迷宮地圖生成、陷阱與題目） ==========
 maze_size = 7
@@ -136,7 +154,6 @@ def callback():
     for event in events:
         if event["type"] == "message":
             reply_token = event["replyToken"]
-            user_id = event["source"]["userId"]
             text = event["message"]["text"].strip()
 
             if text == "主選單":
