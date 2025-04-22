@@ -129,7 +129,7 @@ def callback():
                 # 🔊  回傳 Google Drive 裡的教學影片資料夾連結
                 reply_text(
                     reply_token,
-                    "🎧 點擊下方連結觀看示範影片：\n"
+                    "🎧 點擊下方連結聆聽日語50音音檔吧！：\n"
                     "https://drive.google.com/drive/folders/1nyl9SNbwd9rze3w9eLl5yCviKW54Ic9w?usp=drive_link"
                 )                
 
