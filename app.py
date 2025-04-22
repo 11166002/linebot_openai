@@ -88,6 +88,29 @@ audio_files = [
     "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)57.wav"
 ]
 
+# ========== 日文字清單（與音檔一一對應） ==========
+jp_texts = [
+    "こんにちは",
+    "おはよう",
+    "ありがとうございます",
+    "さようなら",
+    "すみません"
+]
+
+# ========== 音檔時長（ms，與音檔一一對應） ==========
+durations = [
+    2300,  # 13.wav
+    2200,  # 15.wav
+    3300,  # 37.wav
+    2500,  # 40.wav
+    2100   # 57.wav
+]
+
+# ========== 隨機傳送日文＋對應音檔 ==========
+def send_random_audio(reply_token):
+    idx = random.randrange(len(audio_files))
+    reply_text(reply_token, jp_texts[idx])                # 先傳日文
+    reply_audio(reply_token, audio_files[idx], durations[idx])  # 再傳音檔
 # ========== 🧩 迷宮遊戲設定（迷宮地圖生成、陷阱與題目） ==========
 maze_size = 7
 maze = [["⬜" for _ in range(maze_size)] for _ in range(maze_size)]
