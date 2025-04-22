@@ -221,7 +221,7 @@ def callback():
                     reply_text(reply_token, "請先輸入 2 開始題目，再回覆 A / B / C 作答")
             else:
                 reply_text(reply_token, "請輸入『主選單』返回選單")
-    return "OK", 200
+           
             elif text == "3" or text == "我要玩迷宮遊戲":
                 players[user_id] = {"pos": (1, 1), "quiz": None, "game": "maze", "score": 0}
                 reply_text(reply_token, render_map((1, 1)) + "\n🌟 迷宮遊戲開始！請輸入「上」「下」「左」「右」移動。")
