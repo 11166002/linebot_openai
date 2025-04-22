@@ -111,6 +111,34 @@ def send_random_audio(reply_token):
     idx = random.randrange(len(audio_files))
     reply_text(reply_token, jp_texts[idx])                # 先傳日文
     reply_audio(reply_token, audio_files[idx], durations[idx])  # 再傳音檔
+
+# ==========  選擇題狀態暫存  ==========
+# key = reply_token  (或 user_id/session_key 皆可)
+# value = {"A": idx0, "B": idx1, "C": idx2}
+quiz_pool = {}
+
+# ==========  傳送選擇題 (A/B/C) ==========
+def send_quiz(reply_token):
+    idxs = random.sample(range(len(audio_files)), 3)         # 抽 3 句
+    options = ["A", "B", "C"]
+    mapping = dict(zip(options, idxs))                       # 建立對照
+    quiz_pool[reply_token] = mapping                         # 暫存使用者題目
+    lines = [f"{opt}. {jp_texts[i]}" for opt, i in mapping.items()]
+    msg = "請選擇正確的讀音（回覆 A / B / C）：\n" + "\n".join(lines)
+    reply_text(reply_token, msg)
+
+# ==========  處理使用者回答 (A/B/C) ==========
+def handle_answer(reply_token, user_msg):
+    user_msg = user_msg.strip().upper()
+    mapping = quiz_pool.get(reply_token)
+    if not mapping or user_msg not in mapping:
+        reply_text(reply_token, "請先輸入 quiz 開始題目，或回覆 A / B / C 作答")
+        return
+    idx = mapping[user_msg]
+    # 先顯示正確日文，再播音檔
+    reply_text(reply_token, f"正確答案：{jp_texts[idx]}")
+    reply_audio(reply_token, audio_files[idx], durations[idx])
+    del quiz_pool[reply_token]
 # ========== 🧩 迷宮遊戲設定（迷宮地圖生成、陷阱與題目） ==========
 maze_size = 7
 maze = [["⬜" for _ in range(maze_size)] for _ in range(maze_size)]
