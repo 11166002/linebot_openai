@@ -124,15 +124,14 @@ def callback():
             elif text == "1" or text == "我要看五十音":
                 reply_text(reply_token, get_kana_table())
 
-            
             elif text == "2" or text == "我要聽音檔":
-                # 🔊  回傳 Google Drive 裡的教學影片資料夾連結
-                reply_text(
-                    reply_token,
-                    "🎧 點擊下方連結聆聽日語50音音檔吧！：\n"
-                    "https://drive.google.com/drive/folders/1nyl9SNbwd9rze3w9eLl5yCviKW54Ic9w?usp=drive_link"
-                )                
-
+               # 🔊 播放 GitHub 上的音檔（七海(女性)13.wav）
+                 reply_audio(
+                     reply_token,
+                     original_content_url="https://raw.githubusercontent.com/11166002/audio-files/main/七海(女性)13.wav",
+                     duration=2000  # 單位毫秒，可根據實際音檔長度調整
+                )  
+            
             elif text == "3" or text == "我要玩迷宮遊戲":
                 players[user_id] = {"pos": (1, 1), "quiz": None, "game": "maze", "score": 0}
                 reply_text(reply_token, render_map((1, 1)) + "\n🌟 迷宮遊戲開始！請輸入「上」「下」「左」「右」移動。")
@@ -245,14 +244,18 @@ def callback():
                     "📢 請輸入『主選單』")
 
 
-def reply_text(reply_token, text):
+def reply_audio(reply_token, original_content_url, duration):
     headers = {
         "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
         "Content-Type": "application/json"
     }
     body = {
         "replyToken": reply_token,
-        "messages": [{"type": "text", "text": text}]
+        "messages": [{
+            "type": "audio",
+            "originalContentUrl": original_content_url,
+            "duration": duration
+        }]
     }
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
