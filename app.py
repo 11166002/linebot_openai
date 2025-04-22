@@ -125,12 +125,20 @@ def callback():
                 reply_text(reply_token, get_kana_table())
 
             elif text == "2" or text == "我要聽音檔":
-               # 🔊 播放 GitHub 上的音檔（七海(女性)13.wav）
-                 reply_audio(
-                     reply_token,
-                     original_content_url="https://raw.githubusercontent.com/11166002/audio-files/main/七海(女性)13.wav",
-                     duration=2000  # 單位毫秒，可根據實際音檔長度調整
-                )  
+                # 🔊 播放 GitHub 上的音檔（七海(女性)69.wav）
+                reply_audio(
+                    reply_token,
+                    original_content_url="https://raw.githubusercontent.com/11166002/audio-files/main/七海(女性)69.wav",
+                    duration=2000
+                )
+
+            elif text == "播放2":
+                # 🔊 播放 GitHub 上的音檔（七海(女性)65.wav）
+                reply_audio(
+                    reply_token,
+                    original_content_url="https://raw.githubusercontent.com/11166002/audio-files/main/七海(女性)65.wav",
+                    duration=2000
+                )
             
             elif text == "3" or text == "我要玩迷宮遊戲":
                 players[user_id] = {"pos": (1, 1), "quiz": None, "game": "maze", "score": 0}
