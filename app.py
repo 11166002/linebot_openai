@@ -3,7 +3,7 @@ import random
 import requests
 
 app = Flask(__name__)
-
+ffmpeg -i 13.wav -c:a aac -b:a 128k 13.m4a
 # ========== LINE Token ==========
 CHANNEL_ACCESS_TOKEN = "liqx01baPcbWbRF5if7oqBsZyf2+2L0eTOwvbIJ6f2Wec6is4sVd5onjl4fQAmc4n8EuqMfo7prlaG5la6kXb/y1gWOnk8ztwjjx2ZnukQbPJQeDwwcPEdFTOGOmQ1t88bQLvgQVczlzc/S9Q/6y5gdB04t89/1O/w1cDnyilFU="
 
@@ -79,13 +79,24 @@ def reply_audio(reply_token, original_content_url, duration):
     }
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
-# ========== 音檔清單 ==========
+# ========== 轉好的音檔 (m4a / mp3) ==========
 audio_files = [
-    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)13.wav",
-    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)15.wav",
-    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)37.wav",
-    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)40.wav",
-    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)57.wav"
+    # 例：你用 ffmpeg 轉好的 m4a 放在同一個 GitHub repo
+    "https://raw.githubusercontent.com/11166002/audio-files/main/13.m4a",
+    "https://raw.githubusercontent.com/11166002/audio-files/main/15.m4a",
+    "https://raw.githubusercontent.com/11166002/audio-files/main/37.m4a",
+    "https://raw.githubusercontent.com/11166002/audio-files/main/40.m4a",
+    "https://raw.githubusercontent.com/11166002/audio-files/main/57.m4a"
+]
+
+# ==========  對應時長 (毫秒) ==========
+# 重新用 ffmpeg -i file.m4a 讀秒數 ×1000；以下僅範例
+durations = [
+    2100,  # 13.m4a  (2.1s)
+    2000,  # 15.m4a
+    3200,  # 37.m4a
+    2400,  # 40.m4a
+    2050   # 57.m4a
 ]
 
 # ========== 日文字清單（與音檔一一對應） ==========
