@@ -51,6 +51,18 @@ kana_dict.update({
     "びゃ": "bya", "びゅ": "byu", "びょ": "byo",
     "ぴゃ": "pya", "ぴゅ": "pyu", "ぴょ": "pyo"
 })
+# ========== 回傳純文字訊息 ==========
+def reply_text(reply_token, text):
+    headers = {
+        "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    body = {
+        "replyToken": reply_token,
+        "messages": [{"type": "text", "text": text}]
+    }
+    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
+
 # ========== 回傳音檔 ==========
 def reply_audio(reply_token, original_content_url, duration):
     headers = {
@@ -64,6 +76,21 @@ def reply_audio(reply_token, original_content_url, duration):
             "originalContentUrl": original_content_url,
             "duration": duration
         }]
+    }
+    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
+
+# ========= 回傳「文字 + 音檔」(一次用同一 replyToken) ==========
+def reply_text_audio(reply_token, kana, original_content_url, duration):
+    headers = {
+        "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    body = {
+        "replyToken": reply_token,
+        "messages": [
+            {"type": "text", "text": f"🔊 現在播放：{kana} 的發音"},
+            {"type": "audio", "originalContentUrl": original_content_url, "duration": duration}
+        ]
     }
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
@@ -82,7 +109,7 @@ def reply_text_audio(reply_token, text, original_content_url, duration):
     }
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
-# ========== 音檔清單（假名 + 對應音檔 URL） ==========
+# ========== 音檔清單（假名 + 音檔 URL） ==========
 audio_files = [
     ("あ", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)13.wav"),
     ("い", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)15.wav"),
@@ -90,9 +117,6 @@ audio_files = [
     ("え", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)40.wav"),
     ("お", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)57.wav")
 ]
-
-# ========== 遊戲用的玩家與問題設定等省略，保留原邏輯 ==========
-# 可接續你原有的 maze_game, race_game 等函數
 
 # ========== 🧩 迷宮遊戲設定（迷宮地圖生成、陷阱與題目） ==========
 maze_size = 7
@@ -167,9 +191,8 @@ def callback():
                 reply_text(reply_token, get_kana_table())
 
             elif text == "2" or text == "我要聽音檔":
-                kana, audio_url = random.choice(audio_files)
-                reply_text(reply_token, f"🔊 現在播放：{kana} 的發音")
-                reply_audio(reply_token, original_content_url=audio_url, duration=2000)
+                random_audio = random.choice(audio_files)
+                reply_audio(reply_token, original_content_url=random_audio, duration=2000)
 
             elif text == "3" or text == "我要玩迷宮遊戲":
                 players[user_id] = {"pos": (1, 1), "quiz": None, "game": "maze", "score": 0}
