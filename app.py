@@ -113,32 +113,32 @@ def send_random_audio(reply_token):
     reply_audio(reply_token, audio_files[idx], durations[idx])  # 再傳音檔
 
 # ==========  選擇題狀態暫存  ==========
-# key = reply_token  (或 user_id/session_key 皆可)
+# key = user_id
 # value = {"A": idx0, "B": idx1, "C": idx2}
 quiz_pool = {}
 
 # ==========  傳送選擇題 (A/B/C) ==========
-def send_quiz(reply_token):
+def send_quiz(reply_token, user_id):
     idxs = random.sample(range(len(audio_files)), 3)         # 抽 3 句
     options = ["A", "B", "C"]
     mapping = dict(zip(options, idxs))                       # 建立對照
-    quiz_pool[reply_token] = mapping                         # 暫存使用者題目
+    quiz_pool[user_id] = mapping                             # 暫存使用者題目
     lines = [f"{opt}. {jp_texts[i]}" for opt, i in mapping.items()]
     msg = "請選擇正確的讀音（回覆 A / B / C）：\n" + "\n".join(lines)
     reply_text(reply_token, msg)
 
 # ==========  處理使用者回答 (A/B/C) ==========
-def handle_answer(reply_token, user_msg):
+def handle_answer(reply_token, user_id, user_msg):
     user_msg = user_msg.strip().upper()
-    mapping = quiz_pool.get(reply_token)
+    mapping = quiz_pool.get(user_id)
     if not mapping or user_msg not in mapping:
-        reply_text(reply_token, "請先輸入 quiz 開始題目，或回覆 A / B / C 作答")
-        return
+        return False
     idx = mapping[user_msg]
-    # 先顯示正確日文，再播音檔
     reply_text(reply_token, f"正確答案：{jp_texts[idx]}")
     reply_audio(reply_token, audio_files[idx], durations[idx])
-    del quiz_pool[reply_token]
+    del quiz_pool[user_id]
+    return True
+
 # ========== 🧩 迷宮遊戲設定（迷宮地圖生成、陷阱與題目） ==========
 maze_size = 7
 maze = [["⬜" for _ in range(maze_size)] for _ in range(maze_size)]
@@ -179,6 +179,7 @@ dart_words = {
 }
 dart_sessions = {}
 
+# ==========  LINE callback ==========
 @app.route("/callback", methods=["POST"])
 def callback():
     body = request.get_json()
@@ -212,9 +213,15 @@ def callback():
                 reply_text(reply_token, get_kana_table())
 
             elif text == "2" or text == "我要聽音檔":
-                random_audio = random.choice(audio_files)
-                reply_audio(reply_token, original_content_url=random_audio, duration=2000)
+                send_quiz(reply_token, user_id)                # 顯示 A/B/C 選擇題
 
+            elif text.upper() in ["A", "B", "C"]:
+                ok = handle_answer(reply_token, user_id, text) # 判斷是否為正在答題
+                if not ok:
+                    reply_text(reply_token, "請先輸入 2 開始題目，再回覆 A / B / C 作答")
+            else:
+                reply_text(reply_token, "請輸入『主選單』返回選單")
+    return "OK", 200
             elif text == "3" or text == "我要玩迷宮遊戲":
                 players[user_id] = {"pos": (1, 1), "quiz": None, "game": "maze", "score": 0}
                 reply_text(reply_token, render_map((1, 1)) + "\n🌟 迷宮遊戲開始！請輸入「上」「下」「左」「右」移動。")
