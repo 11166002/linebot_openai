@@ -1,15 +1,12 @@
-from flask import Flask
-app = Flask(__name__)
+from flask import Flask, request, jsonify
+import random
+import requests
 
-from flask import request, abort
-from linebot import  LineBotApi, WebhookHandler
-from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, PostbackEvent, TextSendMessage, TemplateSendMessage, ConfirmTemplate, MessageTemplateAction, ButtonsTemplate, PostbackTemplateAction, URITemplateAction, CarouselTemplate, CarouselColumn, ImageCarouselTemplate, ImageCarouselColumn
-from urllib.parse import parse_qsl
+app = Flask(__name__)
 
 # ========== LINE Token ==========
 CHANNEL_ACCESS_TOKEN = "liqx01baPcbWbRF5if7oqBsZyf2+2L0eTOwvbIJ6f2Wec6is4sVd5onjl4fQAmc4n8EuqMfo7prlaG5la6kXb/y1gWOnk8ztwjjx2ZnukQbPJQeDwwcPEdFTOGOmQ1t88bQLvgQVczlzc/S9Q/6y5gdB04t89/1O/w1cDnyilFU="
-handler = WebhookHandler('cd9fbd2ce22b12f243c5fcd2d97e5680')
+
 # ========== 📘 日語五十音資料區（kana_dict） ==========
 kana_dict = {}
 
@@ -131,43 +128,10 @@ dart_words = {
 }
 dart_sessions = {}
 
-from linebot.models import ImageSendMessage, TextSendMessage
 
-@handler.add(MessageEvent, message=TextMessage)
-def handle_message(event):
-    reply_token = event.reply_token
-    user_id     = event.source.user_id
-    text        = event.message.text.strip()
 
-    if text == "主選單":
-        menu = (
-            "請輸入以下數字：\n"
-            "1. 我要看五十音\n"
-            "2. 我要聽音檔\n"
-            "3. 我要玩迷宮遊戲\n"
-            "4. 我要玩賽車遊戲\n"
-            "5. 我要玩射飛鏢 進階篇\n"
-            "6. 我要填問卷～\n\n"
-            "【遊戲規則】\n"
-            "📘 看五十音：查看所有平假名、片假名與羅馬拼音對照。\n"
-            "🔊 聽音檔：播放50音發音音檔。\n"
-            "🧩 迷宮遊戲：使用『上/下/左/右』移動角色，遇到假名選擇題時答對才能繼續。\n"
-            "🏎 賽車遊戲：每次輸入『前進』會推進一格，抵達終點即勝利！\n"
-            "🎯 射飛鏢：隨機射中一個日文單字，選出正確的羅馬拼音！"
-        )
-        reply_text(reply_token, menu)
-
-    elif text == "1" or text == "我要看五十音":
-        line_bot_api.reply_message(
-            reply_token,
-            [
-                ImageSendMessage(
-                    original_content_url="https://i.imgur.com/TGccWWG.png",
-                    preview_image_url="https://i.imgur.com/TGccWWG.png"
-                ),
-                TextSendMessage(text=get_kana_table())
-            ]
-        )
+            elif text == "1" or text == "我要看五十音":
+                reply_text(reply_token, get_kana_table())
 
             elif text == "2" or text == "我要聽音檔":
                 random_audio = random.choice(audio_files)
