@@ -79,6 +79,38 @@ def reply_audio(reply_token, original_content_url, duration):
     }
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
+# ========== 回傳 Quick Reply（新增） ==========
+def reply_quick(reply_token, text, btns):
+    """
+    btns = [("按鈕顯示文字", "點擊後送出的文字"), ...]
+    """
+    items = [{
+        "type": "action",
+        "action": {
+            "type": "message",
+            "label": label,
+            "text": value
+        }
+    } for label, value in btns]
+
+    headers = {
+        "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    body = {
+        "replyToken": reply_token,
+        "messages": [{
+            "type": "text",
+            "text": text,
+            "quickReply": {"items": items}
+        }]
+    }
+    requests.post(
+        "https://api.line.me/v2/bot/message/reply",
+        headers=headers,
+        json=body
+    )
+
 # ========== 音檔清單 ==========
 audio_files = [
     "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)13.wav",
@@ -128,34 +160,52 @@ dart_words = {
 }
 dart_sessions = {}
 
+@app.route("/callback", methods=["POST"])
+def callback():
+    body = request.get_json()
+    events = body.get("events", [])
+
+    for event in events:
         if event["type"] == "message":
             reply_token = event["replyToken"]
             user_id = event["source"]["userId"]
             text = event["message"]["text"].strip()
 
-            # 1️⃣ 查看五十音
-            if text == "1" or text == "我要看五十音":
+            if text == "主選單":
+                menu = (
+                    "請選擇：\n"
+                    "1. 我要看五十音\n"
+                    "2. 我要聽音檔\n"
+                    "3. 我要玩迷宮遊戲\n"
+                    "4. 我要玩賽車遊戲\n"
+                    "5. 我要玩射飛鏢 進階篇\n"
+                    "6. 我要填問卷～\n\n"
+                    "【遊戲規則】\n"
+                    "📘 看五十音：查看所有平假名、片假名與羅馬拼音對照。\n"
+                    "🔊 聽音檔：播放50音發音音檔。\n"
+                    "🧩 迷宮遊戲：使用『上/下/左/右』移動角色，遇到假名選擇題時答對才能繼續。\n"
+                    "🏎 賽車遊戲：每次輸入『前進』會推進一格，抵達終點即勝利！\n"
+                    "🎯 射飛鏢：隨機射中一個日文單字，選出正確的羅馬拼音！"
+                )
+                reply_text(reply_token, menu)
+
+            elif text == "1" or text == "我要看五十音":
                 reply_text(reply_token, get_kana_table())
 
-            # 2️⃣ 聽發音
             elif text == "2" or text == "我要聽音檔":
                 random_audio = random.choice(audio_files)
                 reply_audio(reply_token, original_content_url=random_audio, duration=2000)
 
-            # 3️⃣ 迷宮遊戲
             elif text == "3" or text == "我要玩迷宮遊戲":
                 players[user_id] = {"pos": (1, 1), "quiz": None, "game": "maze", "score": 0}
                 reply_text(reply_token, render_map((1, 1)) + "\n🌟 迷宮遊戲開始！請輸入「上」「下」「左」「右」移動。")
 
-            # 4️⃣ 賽車遊戲
             elif text == "4" or text == "我要玩賽車遊戲":
                 players[user_id] = {"car_pos": 0, "game": "race", "quiz": None, "last_quiz": None, "last_msg": None}
                 reply_text(reply_token, render_race(0) + "\n🏁 賽車遊戲開始！請輸入「前進」來推進你的車子。")
 
-            # 5️⃣ 射飛鏢遊戲
             elif text == "5" or text == "我要玩射飛鏢":
-                # （射飛鏢原邏輯不變，直接貼上你的程式碼）
-                # -------------------------------------------
+                # --- 先隨機選單字並產生選項、記錄 session ---
                 word, (romaji, meaning) = random.choice(list(dart_words.items()))
                 options = [romaji]
                 while len(options) < 3:
@@ -172,6 +222,7 @@ dart_sessions = {}
                 }
                 choices_text = "\n".join([f"{k}. {v}" for k, v in choice_map.items()])
 
+                # --- 一次回覆三則訊息：圖片、情境、遊戲題目 ---
                 headers = {
                     "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
                     "Content-Type": "application/json"
@@ -202,44 +253,69 @@ dart_sessions = {}
                     ]
                 }
                 requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
+                # 射飛鏢遊戲開始
+                word, (romaji, meaning) = random.choice(list(dart_words.items()))
+                options = [romaji]
+                while len(options) < 3:
+                    distractor = random.choice([v[0] for v in dart_words.values()])
+                    if distractor not in options:
+                        options.append(distractor)
+                random.shuffle(options)
+                dart_sessions[user_id] = {"word": word, "meaning": meaning, "answer": romaji, "options": options}
+                choice_map = {"A": options[0], "B": options[1], "C": options[2]}
+                dart_sessions[user_id]["choice_map"] = choice_map
+                choices_text = "\n".join([f"{k}. {v}" for k, v in choice_map.items()])
+                reply_text(
+                    reply_token,
+                    f"🎯 射飛鏢結果：你射中了「{word}（{meaning}）」！\n"
+                    f"請選出正確的羅馬拼音：\n{choices_text}"
+                )
 
-            # 6️⃣ 問卷連結
-            elif text == "6" or text == "我要填問卷～":
-                reply_text(reply_token, "📋 請點選以下連結填寫問卷：\nhttps://forms.gle/w5GNDJ7PY9uWTpsG6")
-
-            # 迷宮遊戲進行中
-            elif user_id in players and players[user_id].get("game") == "maze" and text in ["上", "下", "左", "右"]:
-                result = maze_game(user_id, text)
-                reply_text(reply_token, result["map"] + "\n💬 " + result["message"])
-
-            # 迷宮題目回答
-            elif user_id in players and players[user_id].get("game") == "maze" and players[user_id].get("quiz"):
-                result = maze_game(user_id, text)
-                reply_text(reply_token, result["map"] + "\n💬 " + result["message"])
-
-            # 賽車回答
-            elif user_id in players and players[user_id].get("game") == "race" and text in ["A", "B", "C", "D"]:
-                result = race_answer(user_id, text)
-                reply_text(reply_token, result)
-
-            # 賽車前進
-            elif user_id in players and players[user_id].get("game") == "race" and text == "前進":
-                result = race_game(user_id)
-                reply_text(reply_token, result)
-
-            # 射飛鏢答案
             elif user_id in dart_sessions and text in ["A", "B", "C"]:
+                # 處理射飛鏢答案
                 session = dart_sessions[user_id]
                 if session["choice_map"][text] == session["answer"]:
                     del dart_sessions[user_id]
                     reply_text(reply_token, "🎯 命中！答對了！")
                 else:
                     choices_text = "\n".join([f"{k}. {v}" for k, v in session["choice_map"].items()])
-                    reply_text(reply_token, f"❌ 沒射中，再試一次！\n{choices_text}")
+                    reply_text(
+                        reply_token,
+                        f"❌ 沒射中，再試一次！請選出「{session['word']}（{session['meaning']}）」的正確羅馬拼音：\n{choices_text}"
+                    )
 
-            # 其他輸入
+            elif text == "6" or text == "我要填問卷～":
+                reply_text(reply_token, "📋 請點選以下連結填寫問卷：\nhttps://forms.gle/w5GNDJ7PY9uWTpsG6")
+
+            elif user_id in players and players[user_id].get("game") == "maze" and text in ["上", "下", "左", "右"]:
+                result = maze_game(user_id, text)
+                reply_text(reply_token, result["map"] + "\n💬 " + result["message"])
+
+            elif user_id in players and players[user_id].get("game") == "maze" and players[user_id].get("quiz"):
+                result = maze_game(user_id, text)
+                reply_text(reply_token, result["map"] + "\n💬 " + result["message"])
+
+            elif user_id in players and players[user_id].get("game") == "race" and text in ["A", "B", "C", "D"]:
+                result = race_answer(user_id, text)
+                reply_text(reply_token, result)
+
+            elif user_id in players and players[user_id].get("game") == "race" and text == "前進":
+                result = race_game(user_id)
+                reply_text(reply_token, result)
+
             else:
-                reply_text(reply_token, "📢 請輸入 1, 2, 3, 4, 5 或 6 來選擇功能")
+                reply_quick(
+                    reply_token,
+                    "請選擇功能或直接輸入數字：",
+                    [
+                        ("五十音表", "1"),
+                        ("聽發音",  "2"),
+                        ("迷宮遊戲", "3"),
+                        ("賽車遊戲", "4"),
+                        ("射飛鏢",  "5"),
+                        ("填問卷",  "6")
+                    ]
+                )
 
 
 def reply_text(reply_token, text):
