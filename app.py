@@ -79,38 +79,6 @@ def reply_audio(reply_token, original_content_url, duration):
     }
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
-# ========== 回傳 Quick Reply（新增） ==========
-def reply_quick(reply_token, text, btns):
-    """
-    btns = [("按鈕顯示文字", "點擊後送出的文字"), ...]
-    """
-    items = [{
-        "type": "action",
-        "action": {
-            "type": "message",
-            "label": label,
-            "text": value
-        }
-    } for label, value in btns]
-
-    headers = {
-        "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    body = {
-        "replyToken": reply_token,
-        "messages": [{
-            "type": "text",
-            "text": text,
-            "quickReply": {"items": items}
-        }]
-    }
-    requests.post(
-        "https://api.line.me/v2/bot/message/reply",
-        headers=headers,
-        json=body
-    )
-
 # ========== 音檔清單 ==========
 audio_files = [
     "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)13.wav",
@@ -187,8 +155,19 @@ def callback():
                     "🏎 賽車遊戲：每次輸入『前進』會推進一格，抵達終點即勝利！\n"
                     "🎯 射飛鏢：隨機射中一個日文單字，選出正確的羅馬拼音！"
                 )
-                reply_text(reply_token, menu)
-
+                reply_text(reply_token, menu)   # 原本純文字回覆
+                reply_quick(                   # ★ 加入 Quick Reply
+                    reply_token,
+                    "👇 也可以直接點按按鈕：",
+                    [
+                        ("五十音表", "1"),
+                        ("聽發音",  "2"),
+                        ("迷宮遊戲", "3"),
+                        ("賽車遊戲", "4"),
+                        ("射飛鏢",  "5"),
+                        ("填問卷",  "6")
+                    ]
+                )
             elif text == "1" or text == "我要看五十音":
                 reply_text(reply_token, get_kana_table())
 
@@ -304,18 +283,8 @@ def callback():
                 reply_text(reply_token, result)
 
             else:
-                reply_quick(
-                    reply_token,
-                    "請選擇功能或直接輸入數字：",
-                    [
-                        ("五十音表", "1"),
-                        ("聽發音",  "2"),
-                        ("迷宮遊戲", "3"),
-                        ("賽車遊戲", "4"),
-                        ("射飛鏢",  "5"),
-                        ("填問卷",  "6")
-                    ]
-                )
+                reply_text(reply_token,
+                    "📢 請輸入『主選單』")
 
 
 def reply_text(reply_token, text):
