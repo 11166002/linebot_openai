@@ -126,8 +126,6 @@ dart_words = {
     "いぬ": ("inu", "狗"),
     "ねこ": ("neko", "貓")
 }
-dart_sessions = {}
-
 
 
             elif text == "1" or text == "我要看五十音":
