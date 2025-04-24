@@ -131,10 +131,12 @@ def callback():
     events = body.get("events", [])
 
     for event in events:
-        if event["type"] == "message":
-            reply_token = event["replyToken"]
-            user_id = event["source"]["userId"]
-            text = event["message"]["text"].strip()
+        if event["type"] != "message":
+            continue
+
+        reply_token = event["replyToken"]
+        user_id = event["source"]["userId"]
+        text = event["message"]["text"].strip()
 
             if text == "主選單":
                 menu = (
@@ -156,18 +158,21 @@ def callback():
 
             elif text == "1" or text == "我要看五十音":
                 reply_text(reply_token, get_kana_table())
-            elif text == "2" or text == "我要聽音檔":
-                # 隨機選一個音檔 URL
-                random_audio = random.choice(audio_files)
-                # 先回傳音檔
-                reply_audio(reply_token, original_content_url=random_audio, duration=2000)
+            elif text in ("2", "我要聽音檔"):
+            # 1. 隨機選音檔
+            random_audio = random.choice(audio_files)
 
-                # 再檢查這個 URL 是否在對應表裡面
-                if random_audio in audio_to_kana:
+            # 2. 回傳音檔
+            reply_audio(reply_token, original_content_url=random_audio, duration=2000)
+
+            # 3. 如果這支音檔在對應表，就回傳假名與羅馬拼音
+            if random_audio in audio_to_kana:
                 kana, romaji = audio_to_kana[random_audio]
-                # 回傳文字訊息
-                    reply_text(reply_token, f'"{kana}": "{romaji}"')
+                reply_text(reply_token, f'"{kana}": "{romaji}"')
 
+        # ... 其他遊戲分支 ...
+
+    return "OK", 200
 
 
             elif text == "3" or text == "我要玩迷宮遊戲":
@@ -282,6 +287,7 @@ def callback():
                     "📢 請輸入『主選單』")
 
 
+# ========== 回傳純文字與音檔的 helper 函式 ==========
 def reply_text(reply_token, text):
     headers = {
         "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
@@ -290,6 +296,21 @@ def reply_text(reply_token, text):
     body = {
         "replyToken": reply_token,
         "messages": [{"type": "text", "text": text}]
+    }
+    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
+
+def reply_audio(reply_token, original_content_url, duration):
+    headers = {
+        "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    body = {
+        "replyToken": reply_token,
+        "messages": [{
+            "type": "audio",
+            "originalContentUrl": original_content_url,
+            "duration": duration
+        }]
     }
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
