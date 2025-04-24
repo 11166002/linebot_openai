@@ -79,7 +79,37 @@ def reply_audio(reply_token, original_content_url, duration):
     }
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
-# ========== 音檔清單（顯示文字, 音檔 URL） ==========
+# ========= 回傳「文字 + 音檔」(一次用同一 replyToken) ==========
+def reply_text_audio(reply_token, kana, original_content_url, duration):
+    headers = {
+        "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    body = {
+        "replyToken": reply_token,
+        "messages": [
+            {"type": "text", "text": f"🔊 現在播放：{kana} 的發音"},
+            {"type": "audio", "originalContentUrl": original_content_url, "duration": duration}
+        ]
+    }
+    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
+
+# ========= 回傳「文字 + 音檔」(一次用同一 replyToken) ==========
+# 已定義於上方，避免重複定義(reply_token, text, original_content_url, duration):
+    headers = {
+        "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    body = {
+        "replyToken": reply_token,
+        "messages": [
+            {"type": "text", "text": text},
+            {"type": "audio", "originalContentUrl": original_content_url, "duration": duration}
+        ]
+    }
+    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
+
+# ========== 音檔清單（顯示文字, MP3 URL） ==========
 audio_files = [
     ("きゃ : kya", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)13.wav"),
     ("きゅ : kyu", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)15.wav"),
