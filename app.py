@@ -1,4 +1,3 @@
-from flask import Flask, request, jsonify
 import random
 import requests
 
@@ -79,44 +78,12 @@ def reply_audio(reply_token, original_content_url, duration):
     }
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
-# ========= 回傳「文字 + 音檔」(一次用同一 replyToken) ==========
-def reply_text_audio(reply_token, kana, original_content_url, duration):
-    headers = {
-        "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    body = {
-        "replyToken": reply_token,
-        "messages": [
-            {"type": "text", "text": f"🔊 現在播放：{kana} 的發音"},
-            {"type": "audio", "originalContentUrl": original_content_url, "duration": duration}
-        ]
-    }
-    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
+audio_to_kana = {
+    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)13.wav": ("あ", "a"),
+    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)37.wav": ("あ", "a"),
+    # 你可以繼續加上其他特定檔案的對應
+}
 
-# ========= 回傳「文字 + 音檔」(一次用同一 replyToken) ==========
-# 已定義於上方，避免重複定義(reply_token, text, original_content_url, duration):
-    headers = {
-        "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    body = {
-        "replyToken": reply_token,
-        "messages": [
-            {"type": "text", "text": text},
-            {"type": "audio", "originalContentUrl": original_content_url, "duration": duration}
-        ]
-    }
-    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
-
-# ========== 音檔清單（顯示文字, MP3 URL） ==========
-audio_files = [
-    ("きゃ : kya", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)13.wav"),
-    ("きゅ : kyu", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)15.wav"),
-    ("きょ : kyo", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)37.wav"),
-    ("しゃ : sha", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)40.wav"),
-    ("しゅ : shu", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)57.wav")
-]
 
 # ========== 🧩 迷宮遊戲設定（迷宮地圖生成、陷阱與題目） ==========
 maze_size = 7
@@ -189,10 +156,19 @@ def callback():
 
             elif text == "1" or text == "我要看五十音":
                 reply_text(reply_token, get_kana_table())
-
             elif text == "2" or text == "我要聽音檔":
+                # 隨機選一個音檔 URL
                 random_audio = random.choice(audio_files)
+                # 先回傳音檔
                 reply_audio(reply_token, original_content_url=random_audio, duration=2000)
+
+                # 再檢查這個 URL 是否在對應表裡面
+                if random_audio in audio_to_kana:
+                kana, romaji = audio_to_kana[random_audio]
+                # 回傳文字訊息
+                    reply_text(reply_token, f'"{kana}": "{romaji}"')
+
+
 
             elif text == "3" or text == "我要玩迷宮遊戲":
                 players[user_id] = {"pos": (1, 1), "quiz": None, "game": "maze", "score": 0}
