@@ -131,12 +131,13 @@ def callback():
     events = body.get("events", [])
 
     for event in events:
-        if event["type"] != "message":
+        if event.get("type") != "message":
             continue
 
         reply_token = event["replyToken"]
-        user_id = event["source"]["userId"]
-        text = event["message"]["text"].strip()
+        user_id     = event["source"]["userId"]
+        text        = event["message"]["text"].strip()
+
 
             if text == "主選單":
                 menu = (
@@ -158,21 +159,20 @@ def callback():
 
             elif text == "1" or text == "我要看五十音":
                 reply_text(reply_token, get_kana_table())
+ 
             elif text in ("2", "我要聽音檔"):
             # 1. 隨機選音檔
             random_audio = random.choice(audio_files)
 
             # 2. 回傳音檔
-            reply_audio(reply_token, original_content_url=random_audio, duration=2000)
+            reply_audio(reply_token,
+                        original_content_url=random_audio,
+                        duration=2000)
 
-            # 3. 如果這支音檔在對應表，就回傳假名與羅馬拼音
+            # 3. 如果這支音檔有對應，就再回一則文字
             if random_audio in audio_to_kana:
                 kana, romaji = audio_to_kana[random_audio]
                 reply_text(reply_token, f'"{kana}": "{romaji}"')
-
-        # ... 其他遊戲分支 ...
-
-    return "OK", 200
 
 
             elif text == "3" or text == "我要玩迷宮遊戲":
@@ -287,22 +287,22 @@ def callback():
                     "📢 請輸入『主選單』")
 
 
-# ========== 回傳純文字與音檔的 helper 函式 ==========
 def reply_text(reply_token, text):
     headers = {
         "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
     }
     body = {
         "replyToken": reply_token,
         "messages": [{"type": "text", "text": text}]
     }
-    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
+    requests.post("https://api.line.me/v2/bot/message/reply",
+                  headers=headers, json=body)
 
 def reply_audio(reply_token, original_content_url, duration):
     headers = {
         "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
     }
     body = {
         "replyToken": reply_token,
@@ -312,8 +312,8 @@ def reply_audio(reply_token, original_content_url, duration):
             "duration": duration
         }]
     }
-    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
-
+    requests.post("https://api.line.me/v2/bot/message/reply",
+                  headers=headers, json=body)
 # 🧩 迷宮遊戲邏輯
 def maze_game(user, message):
     player = players.setdefault(user, {"pos": start, "quiz": None, "game": "maze", "score": 0})
