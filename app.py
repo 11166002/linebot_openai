@@ -1,3 +1,4 @@
+from flask import Flask, request, jsonify
 import random
 import requests
 
@@ -78,12 +79,14 @@ def reply_audio(reply_token, original_content_url, duration):
     }
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
-audio_to_kana = {
-    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)13.wav": ("あ", "a"),
-    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)37.wav": ("あ", "a"),
-    # 你可以繼續加上其他特定檔案的對應
-}
-
+# ========== 音檔清單 ==========
+audio_files = [
+    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)13.wav",
+    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)15.wav",
+    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)37.wav",
+    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)40.wav",
+    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)57.wav"
+]
 
 # ========== 🧩 迷宮遊戲設定（迷宮地圖生成、陷阱與題目） ==========
 maze_size = 7
@@ -131,13 +134,10 @@ def callback():
     events = body.get("events", [])
 
     for event in events:
-        if event.get("type") != "message":
-            continue
-
-        reply_token = event["replyToken"]
-        user_id     = event["source"]["userId"]
-        text        = event["message"]["text"].strip()
-
+        if event["type"] == "message":
+            reply_token = event["replyToken"]
+            user_id = event["source"]["userId"]
+            text = event["message"]["text"].strip()
 
             if text == "主選單":
                 menu = (
@@ -159,21 +159,10 @@ def callback():
 
             elif text == "1" or text == "我要看五十音":
                 reply_text(reply_token, get_kana_table())
- 
-            elif text in ("2", "我要聽音檔"):
-            # 1. 隨機選音檔
-            random_audio = random.choice(audio_files)
 
-            # 2. 回傳音檔
-            reply_audio(reply_token,
-                        original_content_url=random_audio,
-                        duration=2000)
-
-            # 3. 如果這支音檔有對應，就再回一則文字
-            if random_audio in audio_to_kana:
-                kana, romaji = audio_to_kana[random_audio]
-                reply_text(reply_token, f'"{kana}": "{romaji}"')
-
+            elif text == "2" or text == "我要聽音檔":
+                random_audio = random.choice(audio_files)
+                reply_audio(reply_token, original_content_url=random_audio, duration=2000)
 
             elif text == "3" or text == "我要玩迷宮遊戲":
                 players[user_id] = {"pos": (1, 1), "quiz": None, "game": "maze", "score": 0}
@@ -290,30 +279,14 @@ def callback():
 def reply_text(reply_token, text):
     headers = {
         "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
-        "Content-Type": "application/json",
+        "Content-Type": "application/json"
     }
     body = {
         "replyToken": reply_token,
         "messages": [{"type": "text", "text": text}]
     }
-    requests.post("https://api.line.me/v2/bot/message/reply",
-                  headers=headers, json=body)
+    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
-def reply_audio(reply_token, original_content_url, duration):
-    headers = {
-        "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
-        "Content-Type": "application/json",
-    }
-    body = {
-        "replyToken": reply_token,
-        "messages": [{
-            "type": "audio",
-            "originalContentUrl": original_content_url,
-            "duration": duration
-        }]
-    }
-    requests.post("https://api.line.me/v2/bot/message/reply",
-                  headers=headers, json=body)
 # 🧩 迷宮遊戲邏輯
 def maze_game(user, message):
     player = players.setdefault(user, {"pos": start, "quiz": None, "game": "maze", "score": 0})
