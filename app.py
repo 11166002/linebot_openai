@@ -100,20 +100,22 @@ def reply_text_audio(reply_token, text_msg, audio_url, duration):
 
 # ========== 音檔清單 ==========
 audio_files = [
+    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7).m4a",
     "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)1.m4a",
-    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)1.m4a",
-    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)1.m4a",
-    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)1.m4a",
-    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)1.m4a"
+    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)2.m4a",
+    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)3.m4a",
+    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)4.m4a",
+    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)5.m4a"
 ]
 
 # 與音檔對應的假名與羅馬拼音
 audio_labels = [
-    ("あ", "a"),
-    ("い", "i"),
-    ("う", "u"),
-    ("え", "e"),
-    ("お", "o")
+    ("日語：あ", "羅馬拼音：a"),
+    ("日語：い", "羅馬拼音：i"),
+    ("日語：う", "羅馬拼音：u"),
+    ("日語：え", "羅馬拼音：e"),
+    ("日語：お", "羅馬拼音：o"),
+    ("日語：か", "羅馬拼音：ka")
 ]
 
 # ========== 🧩 迷宮遊戲設定（迷宮地圖生成、陷阱與題目） ==========
