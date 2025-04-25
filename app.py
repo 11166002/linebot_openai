@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from collections import deque   # 佇列（給 BFS 用）
 import random                   # 隨機數/抽題都會用到
 import requests                 # 如果之後要打外部 API
+from typing import Set, Tuple, Dict, Any
 
 app = Flask(__name__)
 # ========== LINE Token ==========
@@ -337,9 +338,6 @@ def reply_text(reply_token, text):
 4. 例外保護：所有 set.remove() → discard()，避免 KeyError。
 5. 微調訊息與註解，其他 API 與回傳格式 **保持不變**。
 """
-import random
-from collections import deque
-from typing import Set, Tuple, Dict, Any
 
 # ===== 0. Safety check：確認外部全域齊備 ==============================
 _REQUIRED = [
