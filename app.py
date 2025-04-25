@@ -329,7 +329,8 @@ def reply_text(reply_token, text):
 2. 💎 寶石格：+2 分並計數 items。
 3. 🌀 傳送門：成對存在，踩到隨機移動至另一門。
 4. 適度隨機出題 (40%)，正確 +1 分。
-5. 所有函式名稱、回傳格式維持 {"map": str, "message": str} 規格。
+5. 抵達終點依得分給予三段鼓勵訊息！
+6. 所有函式名稱、回傳格式維持 {"map": str, "message": str} 規格。
 
 ※ 依照你的專案，全域仍需定義：
    maze, maze_size, start, goal, quiz_positions, kana_dict, players。
@@ -427,8 +428,20 @@ def maze_game(user: str, message: str):
     if new_pos == goal:
         score, gems = player["score"], player["items"]
         players.pop(user, None)
-        return {"map": render_map(new_pos),
-                "message": f"🎉 抵達終點！共 {score} 分、{gems} 顆寶石！\n輸入 '主選單' 重新開始"}
+        # 動態鼓勵語
+        if score >= 10:
+            encourage = "🌟 太厲害了！你是迷宮大師！"
+        elif score >= 5:
+            encourage = "👍 表現不錯，再接再厲！"
+        else:
+            encourage = "💪 加油！多多練習會更好！"
+        return {
+            "map": render_map(new_pos),
+            "message": (
+                f"🎉 抵達終點！{encourage}\n共 {score} 分、{gems} 顆寶石！\n"
+                "輸入 '主選單' 重新開始"
+            ),
+        }
 
     # ---------- F. 出題 ----------
     if new_pos in quiz_positions or random.random() < 0.4:
@@ -443,12 +456,16 @@ def maze_game(user: str, message: str):
         player["quiz"] = (kana, correct, choice_map)
         player["score"] += 1
         opt_text = "\n".join([f"{k}. {v}" for k, v in choice_map.items()])
-        return {"map": render_map(new_pos),
-                "message": f"❓ 挑戰：「{kana}」羅馬拼音？\n{opt_text}"}
+        return {
+            "map": render_map(new_pos),
+            "message": f"❓ 挑戰：「{kana}」羅馬拼音？\n{opt_text}",
+        }
 
     # ---------- G. 普通移動 ----------
-    return {"map": render_map(new_pos),
-            "message": f"{bonus_msg}你移動了，得分 {player['score']} 分"}
+    return {
+        "map": render_map(new_pos),
+        "message": f"{bonus_msg}你移動了，得分 {player['score']} 分",
+    }
 
 # ===== 3. 地圖繪製 =====================================================
 
