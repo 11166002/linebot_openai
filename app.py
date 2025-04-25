@@ -462,68 +462,123 @@ def render_map(player_pos):
     return result.strip()
 
 
-# 新增一個賽車遊戲的回答處理函式
-def race_answer(user, answer):
-    player = players.get(user)
-    if not player or not player.get("last_quiz"):
-        return "沒有待回答的題目，請輸入『前進』以獲得新題目。"
-    kana, correct, choice_map = player["last_quiz"]
-    if answer in choice_map and choice_map[answer] == correct:
-        player["car_pos"] += 1
-        # 清除 quiz 和 last_quiz，使每次「前進」會產生新題目
-        player["quiz"] = None
-        player["last_quiz"] = None
-        return render_race(player["car_pos"]) + "\n✅ 回答正確，請輸入『前進』以獲得新題目！"
-    else:
-        return render_race(player["car_pos"], kana, choice_map) + "\n❌ 回答錯誤，請再試一次！"
-# 🏎 賽車遊戲畫面顯示
+# 🏎 賽車遊戲（強化版）
+
+# 額外趣味元素：
+# -------------------------------------------------
+# 💰  coin_positions: 撿到可加分並從賽道移除
+# ⚡  nitro_chance: 正確作答後有機會觸發 Nitro，額外前進 1~2 格
+# ⛽  fuel: 錯誤回答會消耗 1 點燃料；燃料歸零則遊戲失敗
+# -------------------------------------------------
+
+track_length = 10
+nitro_chance = 0.25  # 25% 機率觸發 Nitro
+
 
 def render_race(pos, kana=None, options=None):
-    track = ["⬜" for _ in range(10)]
-    if pos >= len(track):
-        return "🏁 你贏了！賽車抵達終點！\n輸入 '主選單' 重新開始"
-    track[pos] = "🏎"
-    race_line = "🚗 賽車進度：\n" + ''.join(track)
+    """顯示賽道、題目與油量/分數"""
+    player = current_player  # 在呼叫端設定 global 供顯示用
+    track = ["⬜" for _ in range(track_length)]
+    # 動態顯示賽道物件
+    for coin in player.get("coins", set()):
+        if 0 <= coin < track_length:
+            track[coin] = "💰"
+    track[min(pos, track_length - 1)] = "🏎"
+
+    race_line = "🚗 賽車進度：\n" + "".join(track)
+    status = f"\n🔥 Nitro: {player.get('nitro', 0)}  |  ⛽ Fuel: {player.get('fuel', 3)}  |  ⭐ Score: {player.get('score', 0)}"
+
+    if pos >= track_length:
+        return (
+            "🏁 你贏了！賽車抵達終點！\n"
+            f"⭐ 最終得分：{player.get('score', 0)}\n"
+            "輸入 '主選單' 重新開始"
+        )
+
     if kana and options:
         options_text = "\n".join([f"{key}. {val}" for key, val in options.items()])
-        return f"{race_line}\n\n❓ 請問「{kana}」的羅馬拼音是？\n{options_text}\n請按按鈕作答（A/B/C）。"
-    return race_line
+        return (
+            f"{race_line}{status}\n\n❓ 請問「{kana}」的羅馬拼音是？\n{options_text}\n請按按鈕作答（A/B/C）。"
+        )
+    return race_line + status
+
 
 # 🏎 賽車遊戲回答處理
+
 def race_answer(user, answer):
     player = players.get(user)
     if not player or not player.get("last_quiz"):
         return "沒有待回答的題目，請輸入『前進』以獲得新題目。"
+
     kana, correct, choice_map = player["last_quiz"]
+
+    global current_player
+    current_player = player  # 供 render_race 使用
+
     if answer in choice_map and choice_map[answer] == correct:
-        player["car_pos"] += 1
+        # 正確：計算 Nitro 與進度
+        step = 1
+        if random.random() < nitro_chance:
+            extra = random.randint(1, 2)
+            step += extra
+            player["nitro"] = player.get("nitro", 0) + 1
+            nitro_msg = f"🚀 Nitro！額外前進 {extra} 格！"
+        else:
+            nitro_msg = ""
+
+        player["car_pos"] += step
+        # 撿到寶石（💰）
+        if player["car_pos"] in player.get("coins", set()):
+            player["coins"].remove(player["car_pos"])
+            player["score"] += 2
+            coin_msg = "💰 撿到金幣 +2 分！"
+        else:
+            coin_msg = ""
+
         player["quiz"] = None
         player["last_quiz"] = None
-        return render_race(player["car_pos"]) + "\n✅ 回答正確，請輸入『前進』以獲得新題目！"
+        return (
+            render_race(player["car_pos"]) +
+            f"\n✅ 回答正確！{nitro_msg} {coin_msg}\n請輸入『前進』以獲得新題目！"
+        )
     else:
-        return render_race(player["car_pos"], kana, choice_map) + "\n❌ 回答錯誤，請再試一次！"
+        # 錯誤：扣燃料
+        player["fuel"] -= 1
+        if player["fuel"] <= 0:
+            players.pop(user)
+            return "🛑 油料耗盡，遊戲結束！輸入 '主選單' 重新開始"
+        return (
+            render_race(player["car_pos"], kana, choice_map) +
+            "\n❌ 回答錯誤，燃料 -1！請再試一次！"
+        )
 
-# 🏎 賽車遊戲畫面顯示
-def render_race(pos, kana=None, options=None):
-    track = ["⬜" for _ in range(10)]
-    if pos >= len(track):
-        return "🏁 你贏了！賽車抵達終點！\n輸入 '主選單' 重新開始"
-    track[pos] = "🏎"
-    race_line = "🚗 賽車進度：\n" + ''.join(track)
-    if kana and options:
-        options_text = "\n".join([f"{key}. {val}" for key, val in options.items()])
-        return f"{race_line}\n\n❓ 請問「{kana}」的羅馬拼音是？\n{options_text}\n請按按鈕作答（A/B/C）。"
-    return race_line
 
 # 🏎 賽車遊戲邏輯
+
 def race_game(user):
     if user not in players:
-        players[user] = {"car_pos": 0, "game": "race", "quiz": None}
+        # 初始化
+        coins = set(random.sample(range(1, track_length - 1), 3))  # 三顆金幣
+        players[user] = {
+            "car_pos": 0,
+            "game": "race",
+            "quiz": None,
+            "fuel": 3,
+            "score": 0,
+            "coins": coins,
+            "nitro": 0,
+        }
     player = players[user]
+
+    # 若先前已有題目
     if player.get("quiz"):
         kana, correct, choice_map = player["quiz"]
         player["last_quiz"] = (kana, correct, choice_map)
+        global current_player
+        current_player = player
         return render_race(player["car_pos"], kana, choice_map)
+
+    # 產生新題目
     kana, correct = random.choice(list(kana_dict.items()))
     options = [correct]
     while len(options) < 3:
@@ -534,6 +589,9 @@ def race_game(user):
     choice_map = {"A": options[0], "B": options[1], "C": options[2]}
     player["quiz"] = (kana, correct, choice_map)
     player["last_quiz"] = (kana, correct, choice_map)
+
+    global current_player
+    current_player = player
     return render_race(player["car_pos"], kana, choice_map)
 
 # 📘 回傳日語五十音表格式文字
