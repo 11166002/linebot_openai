@@ -32,12 +32,12 @@ kana_dict.update({
     "ば": "ba", "び": "bi", "ぶ": "bu", "べ": "be", "ぼ": "bo"
 })
 
-# 半濁音
+# 半濁音（有半濁點）
 kana_dict.update({
     "ぱ": "pa", "ぴ": "pi", "ぷ": "pu", "ぺ": "pe", "ぽ": "po"
 })
 
-# 拗音
+# 拗音（拗合音，平假名 + 小字）
 kana_dict.update({
     "きゃ": "kya", "きゅ": "kyu", "きょ": "kyo",
     "しゃ": "sha", "しゅ": "shu", "しょ": "sho",
@@ -52,27 +52,43 @@ kana_dict.update({
     "ぴゃ": "pya", "ぴゅ": "pyu", "ぴょ": "pyo"
 })
 
-# ========== 音檔清單 (.m4a/AAC) ==========
-audio_files = [
-    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)1.m4a",  # あ
-    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)1.m4a",  # い
-    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)1.m4a",  # う
-    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)1.m4a",  # え
-    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)1.m4a"   # お
-]
-
-audio_labels = [("あ", "a"), ("い", "i"), ("う", "u"), ("え", "e"), ("お", "o")]
-
-# ========== 回傳工具 ==========
+# ========== 回傳純文字訊息 ==========
 
 def reply_text(reply_token, text):
-    headers = {"Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}", "Content-Type": "application/json"}
-    body = {"replyToken": reply_token, "messages": [{"type": "text", "text": text}]}
+    headers = {
+        "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    body = {
+        "replyToken": reply_token,
+        "messages": [{"type": "text", "text": text}]
+    }
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
+# ========== 回傳音檔 ==========
+
+def reply_audio(reply_token, original_content_url, duration):
+    headers = {
+        "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    body = {
+        "replyToken": reply_token,
+        "messages": [{
+            "type": "audio",
+            "originalContentUrl": original_content_url,
+            "duration": duration
+        }]
+    }
+    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
+
+# ========== 同時回傳文字 + 音檔 ==========
 
 def reply_text_audio(reply_token, text_msg, audio_url, duration):
-    headers = {"Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}", "Content-Type": "application/json"}
+    headers = {
+        "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
     body = {
         "replyToken": reply_token,
         "messages": [
@@ -82,53 +98,104 @@ def reply_text_audio(reply_token, text_msg, audio_url, duration):
     }
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
-# ========== 遊戲資料初始化 ==========
+# ========== 音檔清單 ==========
+audio_files = [
+    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)1.m4a",
+    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)1.m4a",
+    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)1.m4a",
+    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)1.m4a",
+    "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)1.m4a"
+]
+
+# 與音檔對應的假名與羅馬拼音
+audio_labels = [
+    ("あ", "a"),
+    ("い", "i"),
+    ("う", "u"),
+    ("え", "e"),
+    ("お", "o")
+]
+
+# ========== 🧩 迷宮遊戲設定（迷宮地圖生成、陷阱與題目） ==========
 maze_size = 7
 maze = [["⬜" for _ in range(maze_size)] for _ in range(maze_size)]
 for i in range(maze_size):
     maze[0][i] = maze[maze_size-1][i] = "⬛"
     maze[i][0] = maze[i][maze_size-1] = "⬛"
 
+# 固定迷宮地圖（不再隨機產生牆壁）
 start = (1, 1)
-goal = (maze_size-2, maze_size-2)
+goal = (maze_size - 2, maze_size - 2)
 maze[goal[0]][goal[1]] = "⛩"
-maze[1][3] = maze[2][2] = maze[3][1] = maze[4][3] = maze[5][2] = "⬜"
+
+# 調整固定牆壁（改為通道以確保有通路）
+maze[1][3] = "⬜"
+maze[2][2] = "⬜"
+maze[3][1] = "⬜"
+maze[4][3] = "⬜"
+maze[5][2] = "⬜"
 
 players = {}
 quiz_positions = [(random.randint(1, maze_size-2), random.randint(1, maze_size-2)) for _ in range(5)]
 
+# 🏹 射飛鏢遊戲資料 (含繁體中文意義)
 dart_words = {
-    "みず": ("mizu", "水"), "たべる": ("taberu", "吃"), "のむ": ("nomu", "喝"),
-    "いく": ("iku", "去"), "くるま": ("kuruma", "車"), "ともだち": ("tomodachi", "朋友"),
-    "せんせい": ("sensei", "老師"), "ほん": ("hon", "書"), "いぬ": ("inu", "狗"), "ねこ": ("neko", "貓")
+    "みず": ("mizu", "水"),
+    "たべる": ("taberu", "吃"),
+    "のむ": ("nomu", "喝"),
+    "いく": ("iku", "去"),
+    "くるま": ("kuruma", "車"),
+    "ともだち": ("tomodachi", "朋友"),
+    "せんせい": ("sensei", "老師"),
+    "ほん": ("hon", "書"),
+    "いぬ": ("inu", "狗"),
+    "ねこ": ("neko", "貓")
 }
 
 dart_sessions = {}
 
-# ========== Webhook ==========
 @app.route("/callback", methods=["POST"])
 def callback():
     body = request.get_json()
-    for event in body.get("events", []):
-        if event.get("type") != "message":
-            continue
-        reply_token = event["replyToken"]
-        user_id = event["source"]["userId"]
-        text = event["message"].get("text", "").strip()
+    events = body.get("events", [])
 
-        if text in ["主選單", "menu"]:
-            reply_text(reply_token, "請選擇：\n1. 看五十音\n2. 聽音檔\n3. 迷宮遊戲\n4. 賽車遊戲\n5. 射飛鏢\n6. 填問卷")
-            return "OK"
+    for event in events:
+        if event["type"] == "message":
+            reply_token = event["replyToken"]
+            user_id = event["source"]["userId"]
+            text = event["message"]["text"].strip()
 
-        if text in ["1", "我要看五十音"]:
-            reply_text(reply_token, get_kana_table())
-            return "OK"
+            if text == "主選單":
+                menu = (
+                    "請選擇：\n"
+                    "1. 我要看五十音\n"
+                    "2. 我要聽音檔\n"
+                    "3. 我要玩迷宮遊戲\n"
+                    "4. 我要玩賽車遊戲\n"
+                    "5. 我要玩射飛鏢 進階篇\n"
+                    "6. 我要填問卷～\n\n"
+                    "【遊戲規則】\n"
+                    "📘 看五十音：查看所有平假名、片假名與羅馬拼音對照。\n"
+                    "🔊 聽音檔：播放50音發音音檔。\n"
+                    "🧩 迷宮遊戲：使用『上/下/左/右』移動角色，遇到假名選擇題時答對才能繼續。\n"
+                    "🏎 賽車遊戲：每次輸入『前進』會推進一格，抵達終點即勝利！\n"
+                    "🎯 射飛鏢：隨機射中一個日文單字，選出正確的羅馬拼音！"
+                )
+                reply_text(reply_token, menu)
 
-        if text in ["2", "我要聽音檔"]:
-            idx = random.randrange(len(audio_files))
-            kana, roma = audio_labels[idx]
-            reply_text_audio(reply_token, f"{kana} ({roma})", audio_files[idx], 2000)
-            return "OK"
+            elif text == "1" or text == "我要看五十音":
+                reply_text(reply_token, get_kana_table())
+                
+            elif text == "2" or text == "我要聽音檔":
+                # 隨機選擇一個音檔並回覆假名 + 音檔（一次回覆）
+                idx = random.randrange(len(audio_files))
+                kana, roma = audio_labels[idx]
+                reply_text_audio(
+                    reply_token,
+                    f"{kana} ({roma})",          # 文字訊息
+                    audio_files[idx],            # 音檔 URL
+                    2000                         # 長度 (毫秒)；請依實際音檔長度調整
+            )
 
             elif text == "3" or text == "我要玩迷宮遊戲":
                 players[user_id] = {"pos": (1, 1), "quiz": None, "game": "maze", "score": 0}
