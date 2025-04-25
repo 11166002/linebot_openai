@@ -2,7 +2,6 @@ from flask import Flask, request, jsonify
 from collections import deque   # 佇列（給 BFS 用）
 import random                   # 隨機數/抽題都會用到
 import requests                 # 如果之後要打外部 API
-from typing import Set, Tuple, Dict, Any
 
 app = Flask(__name__)
 # ========== LINE Token ==========
@@ -338,6 +337,9 @@ def reply_text(reply_token, text):
 4. 例外保護：所有 set.remove() → discard()，避免 KeyError。
 5. 微調訊息與註解，其他 API 與回傳格式 **保持不變**。
 """
+import random
+from collections import deque
+from typing import Set, Tuple, Dict, Any
 
 # ===== 0. Safety check：確認外部全域齊備 ==============================
 _REQUIRED = [
@@ -354,9 +356,11 @@ raw_walls: Set[Pos] = {
     (1, 1), (1, 2), (1, 4),
     (2, 2), (2, 6),
     (3, 1), (3, 3), (3, 5),
-    # (4, 4)        <-- 刪掉這一格！終點就能踏進去
-    (4, 5), (4, 6),
+    (4, 4), (4, 5), (4, 6),
 }
+INIT_HEARTS:  Set[Pos] = {(1, 3), (3, 4)}     # 💎
+INIT_PORTALS: Set[Pos] = {(2, 5), (4, 1)}     # 🌀
+
 # ===== 2. 可達性檢查用 BFS ===========================================
 
 def _is_reachable(blocks: Set[Pos]) -> bool:
