@@ -462,31 +462,42 @@ def render_map(player_pos):
     return result.strip()
 
 
-# 🏎 強化版賽車遊戲
+# 🏎 強化版賽車遊戲（修正版）
 # ------------------------------------------------------------
-# 特色：
-# ⛽ Fuel 機制──錯答扣 1 格油料，歸零 Game Over
-# 💰 Gold Coins──隨機 3 枚，加分並從賽道移除
-# 🚀 Nitro──答對有 25% 機率額外前進 1–2 格
-# ⭐ Score──收集金幣 +2 分；終點顯示總得分
+# 特色（維持不變）：
+# ⛽ Fuel、💰 Gold Coins、🚀 Nitro、⭐ Score
+# 本次修正：
+# 1. 避免 KeyError／NameError：coins 與 nitro 預設值、防止 current_user 未先定義
+# 2. player.setdefault 用於兼容舊玩家資料
+# 3. coins／nitro 讀取改成 get()，確保安全
 # ------------------------------------------------------------
 
 import random
 
 TRACK_LEN = 10        # 賽道長度
-COIN_COUNT = 3        # 金幣數
+COIN_COUNT = 3        # 金幣數量
 FUEL_MAX = 3          # 初始油料
-NITRO_CHANCE = 0.25   # Nitro 觸發機率
+NITRO_CHANCE = 0.25   # Nitro 機率
 
-# players 與 kana_dict 由主程式外部管理
+# ⭐ 若主程式尚未宣告，先給預設
+try:
+    players
+except NameError:
+    players = {}
+try:
+    kana_dict
+except NameError:
+    kana_dict = {}
+# 避免 current_user 未定義
+current_user = None
+
 # ------------------------------------------------------------
 
-
 def render_race(pos, kana=None, options=None):
-    """賽道與題目畫面。保留原接口：pos, kana, options"""
+    """賽道與題目畫面 (保持原接口)"""
     track = ["⬜" for _ in range(TRACK_LEN)]
-    # 取目前玩家狀態（呼叫端保證 current_user 已先行設定）
-    player = players.get(current_user, {})
+    player = players.get(current_user, {}) if current_user else {}
+
     # 繪製金幣
     for coin in player.get("coins", set()):
         if 0 <= coin < TRACK_LEN:
@@ -509,9 +520,8 @@ def render_race(pos, kana=None, options=None):
             "輸入 '主選單' 重新開始"
         )
 
-    # 若有題目
     if kana and options:
-        options_text = "\n".join([f"{key}. {val}" for key, val in options.items()])
+        options_text = "\n".join([f"{k}. {v}" for k, v in options.items()])
         return (
             f"{race_line}{status}\n\n❓ 請問「{kana}」的羅馬拼音是？\n"
             f"{options_text}\n請按按鈕作答（A/B/C）。"
@@ -520,8 +530,9 @@ def render_race(pos, kana=None, options=None):
     return race_line + status
 
 
-# 🏎 賽車遊戲回答處理
 # ------------------------------------------------------------
+# 🏎 賽車遊戲回答處理
+
 
 def race_answer(user, answer):
     player = players.get(user)
@@ -540,15 +551,15 @@ def race_answer(user, answer):
         if random.random() < NITRO_CHANCE:
             extra = random.randint(1, 2)
             step += extra
-            player["nitro"] += 1
+            player["nitro"] = player.get("nitro", 0) + 1
             nitro_msg = f"🚀 Nitro！額外前進 {extra} 格！"
 
         player["car_pos"] += step
 
         # 撿金幣
-        if player["car_pos"] in player["coins"]:
-            player["coins"].remove(player["car_pos"])
-            player["score"] += 2
+        if player["car_pos"] in player.get("coins", set()):
+            player.setdefault("coins", set()).discard(player["car_pos"])
+            player["score"] = player.get("score", 0) + 2
             coin_msg = "💰 撿到金幣 +2 分！"
         else:
             coin_msg = ""
@@ -563,7 +574,7 @@ def race_answer(user, answer):
         )
 
     # ===== 錯誤答案 =====
-    player["fuel"] -= 1
+    player["fuel"] = player.get("fuel", FUEL_MAX) - 1
     if player["fuel"] <= 0:
         players.pop(user, None)
         return (
@@ -571,47 +582,47 @@ def race_answer(user, answer):
             "\n🛑 油料耗盡，遊戲結束！輸入 '主選單' 重新開始"
         )
 
-    # 尚有燃料，重答
     return (
         render_race(player["car_pos"], kana, choice_map) +
         f"\n❌ 回答錯誤，燃料 -1！剩餘 {player['fuel']} 格，再試一次！"
     )
 
 
-# 🏎 賽車遊戲主流程
 # ------------------------------------------------------------
+# 🏎 賽車遊戲主流程
+
 
 def race_game(user):
-    # 初始化玩家
-    if user not in players:
-        coins = set(random.sample(range(1, TRACK_LEN - 1), COIN_COUNT))
-        players[user] = {
-            "car_pos": 0,
-            "game": "race",
-            "quiz": None,
-            "fuel": FUEL_MAX,
-            "score": 0,
-            "coins": coins,
-            "nitro": 0,
-        }
-    player = players[user]
+    # 若舊資料缺少新欄位，setdefault 補齊
+    player = players.setdefault(user, {})
+    player.setdefault("game", "race")
+    player.setdefault("car_pos", 0)
+    player.setdefault("fuel", FUEL_MAX)
+    player.setdefault("score", 0)
+    player.setdefault("coins", set(random.sample(range(1, TRACK_LEN - 1), COIN_COUNT)))
+    player.setdefault("nitro", 0)
 
     global current_user
-    current_user = user  # 供 render_race 使用
+    current_user = user
 
-    # 若已有題目，直接呈現
+    # 若已有題目
     if player.get("quiz"):
         kana, correct, choice_map = player["quiz"]
         player["last_quiz"] = (kana, correct, choice_map)
         return render_race(player["car_pos"], kana, choice_map)
 
     # 產生新題目
+    if not kana_dict:
+        return "⚠️ kana_dict 尚未初始化，無法出題！"
     kana, correct = random.choice(list(kana_dict.items()))
     options = [correct]
-    while len(options) < 3:
+    while len(options) < 3 and len(kana_dict) >= 3:
         distractor = random.choice(list(kana_dict.values()))
         if distractor not in options:
             options.append(distractor)
+    # 若題庫不足 3 個選項，填入重複值避免無限迴圈
+    while len(options) < 3:
+        options.append(correct)
     random.shuffle(options)
     choice_map = {"A": options[0], "B": options[1], "C": options[2]}
 
@@ -619,7 +630,6 @@ def race_game(user):
     player["last_quiz"] = (kana, correct, choice_map)
 
     return render_race(player["car_pos"], kana, choice_map)
-
 
 # 📘 回傳日語五十音表格式文字
 def get_kana_table():
