@@ -322,23 +322,51 @@ def reply_text(reply_token, text):
     }
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
-# === 迷宮靜態設定 ======================================================
+"""
+🏯 迷宮小遊戲（完整可直接貼用）
+— 特色 —
+1. 額外牆面 extra_walls 自動避開入口 / 終點與其鄰格。
+2. 💎 寶石格：+2 分並計數 items。
+3. 🌀 傳送門：成對存在，踩到隨機移動至另一門。
+4. 適度隨機出題 (40%)，正確 +1 分。
+5. 所有函式名稱、回傳格式維持 {"map": str, "message": str} 規格。
 
-# ✨ 額外牆面（⬛）：增加路障與變化
-extra_walls = {
+※ 依照你的專案，全域仍需定義：
+   maze, maze_size, start, goal, quiz_positions, kana_dict, players。
+"""
+
+import random
+
+# ===== 1. 靜態格子設定 ===============================================
+
+raw_walls = {
     (1, 1), (1, 2), (1, 4),
     (2, 2), (2, 6),
     (3, 1), (3, 3), (3, 5),
     (4, 4), (4, 5), (4, 6),
 }
 
-# 💎 寶石與 🌀 傳送門（沿用舊版）
-heart_positions  = {(1, 3), (3, 4)}
-portal_positions = {(2, 5), (4, 1)}   # 必須成對存在
+heart_positions  = {(1, 3), (3, 4)}          # 💎 寶石
+portal_positions = {(2, 5), (4, 1)}          # 🌀 傳送門（成對）
 
-# === 迷宮主邏輯 ========================================================
+# 入口／出口與鄰格保護，避免牆擋路
+protected = {
+    start, goal,
+    (start[0] + 1, start[1]),
+    (start[0],     start[1] + 1),
+    (goal[0] - 1,  goal[1]),
+    (goal[0],      goal[1] - 1),
+}
 
-def maze_game(user, message):
+extra_walls = {
+    c for c in raw_walls
+    if c not in protected and c not in heart_positions and c not in portal_positions
+}
+
+# ===== 2. 主要遊戲邏輯 ==============================================
+
+def maze_game(user: str, message: str):
+    """處理玩家輸入與遊戲進度"""
     player = players.setdefault(
         user,
         {
@@ -350,119 +378,100 @@ def maze_game(user, message):
         },
     )
 
-    # ---------- 1. 處理答題 ----------
-    if player.get("quiz"):
+    # ---------- A. 答題檢查 ----------
+    if player["quiz"]:
         kana, answer, choice_map = player["quiz"]
         if message in choice_map and choice_map[message] == answer:
             player["quiz"] = None
-            return {
-                "map": render_map(player["pos"]),
-                "message": "✅ 回答正確，繼續前進！",
-            }
+            return {"map": render_map(player["pos"]), "message": "✅ 回答正確，繼續前進！"}
         else:
-            options_text = "\n".join([f"{k}. {v}" for k, v in choice_map.items()])
-            return {
-                "map": render_map(player["pos"]),
-                "message": f"❌ 回答錯誤，請再試一次：\n{options_text}",
-            }
+            opts = "\n".join([f"{k}. {v}" for k, v in choice_map.items()])
+            return {"map": render_map(player["pos"]), "message": f"❌ 回答錯誤，再試一次：\n{opts}"}
 
-    # ---------- 2. 處理移動 ----------
+    # ---------- B. 處理移動 ----------
     direction = {"上": (-1, 0), "下": (1, 0), "左": (0, -1), "右": (0, 1)}
     if message not in direction:
-        return {
-            "map": render_map(player["pos"]),
-            "message": "請輸入方向：上、下、左、右",
-        }
+        return {"map": render_map(player["pos"]), "message": "請輸入方向：上、下、左、右"}
 
-    dy, dx        = direction[message]
-    y,  x         = player["pos"]
-    new_pos       = (y + dy, x + dx)
+    dy, dx   = direction[message]
+    y, x     = player["pos"]
+    new_pos  = (y + dy, x + dx)
 
-    # 撞牆（原牆 or 新增牆）
+    # 撞牆
     if (
         not (0 <= new_pos[0] < maze_size and 0 <= new_pos[1] < maze_size)
         or maze[new_pos[0]][new_pos[1]] == "⬛"
         or new_pos in extra_walls
     ):
-        return {
-            "map": render_map(player["pos"]),
-            "message": "🚧 前方是牆，不能走喔！",
-        }
+        return {"map": render_map(player["pos"]), "message": "🚧 前方是牆，不能走喔！"}
 
     player["pos"] = new_pos
-    bonus_msg     = ""  # 特殊格子提示
+    bonus_msg = ""
 
-    # ---------- 3. 傳送門 ----------
+    # ---------- C. 傳送門 ----------
     if new_pos in portal_positions:
-        other_portals = list(portal_positions - {new_pos})
-        if other_portals:
-            player["pos"] = random.choice(other_portals)
-            new_pos       = player["pos"]
-            bonus_msg    += "🌀 你進入傳送門，被傳送到另一處！\n"
+        other = list(portal_positions - {new_pos})
+        if other:
+            player["pos"] = random.choice(other)
+            new_pos = player["pos"]
+            bonus_msg += "🌀 你進入傳送門，被傳送到另一處！\n"
 
-    # ---------- 4. 撿寶石 ----------
+    # ---------- D. 寶石 ----------
     if new_pos in heart_positions:
         heart_positions.remove(new_pos)
         player["score"] += 2
         player["items"] += 1
-        bonus_msg       += "💎 你撿到寶石！（+2 分）\n"
+        bonus_msg += "💎 撿到寶石！（+2 分）\n"
 
-    # ---------- 5. 終點 ----------
+    # ---------- E. 終點 ----------
     if new_pos == goal:
-        final_score = player["score"]
-        gems        = player["items"]
+        score, gems = player["score"], player["items"]
         players.pop(user, None)
-        return {
-            "map": render_map(new_pos),
-            "message": f"🎉 恭喜你到達終點！共獲得 {final_score} 分、{gems} 顆寶石！\n輸入 '主選單' 重新開始",
-        }
+        return {"map": render_map(new_pos),
+                "message": f"🎉 抵達終點！共 {score} 分、{gems} 顆寶石！\n輸入 '主選單' 重新開始"}
 
-    # ---------- 6. 出題機制 ----------
+    # ---------- F. 出題 ----------
     if new_pos in quiz_positions or random.random() < 0.4:
         kana, correct = random.choice(list(kana_dict.items()))
-        options = [correct]
-        while len(options) < 3:
+        opts = [correct]
+        while len(opts) < 3:
             d = random.choice(list(kana_dict.values()))
-            if d not in options:
-                options.append(d)
-        random.shuffle(options)
-        choice_map            = {"A": options[0], "B": options[1], "C": options[2]}
-        player["quiz"]        = (kana, correct, choice_map)
-        player["score"]      += 1
-        options_text          = "\n".join([f"{k}. {v}" for k, v in choice_map.items()])
-        return {
-            "map": render_map(new_pos),
-            "message": f"❓ 挑戰：「{kana}」的羅馬拼音是？\n請從下列選項點選：\n{options_text}",
-        }
+            if d not in opts:
+                opts.append(d)
+        random.shuffle(opts)
+        choice_map = {"A": opts[0], "B": opts[1], "C": opts[2]}
+        player["quiz"] = (kana, correct, choice_map)
+        player["score"] += 1
+        opt_text = "\n".join([f"{k}. {v}" for k, v in choice_map.items()])
+        return {"map": render_map(new_pos),
+                "message": f"❓ 挑戰：「{kana}」羅馬拼音？\n{opt_text}"}
 
-    # ---------- 7. 普通移動回覆 ----------
-    return {
-        "map": render_map(new_pos),
-        "message": f"{bonus_msg}你移動了，可以繼續前進（得分 {player['score']} 分）",
-    }
+    # ---------- G. 普通移動 ----------
+    return {"map": render_map(new_pos),
+            "message": f"{bonus_msg}你移動了，得分 {player['score']} 分"}
 
-
-# === 迷宮繪製 ==========================================================
+# ===== 3. 地圖繪製 =====================================================
 
 def render_map(player_pos):
-    result = ""
+    res = []
     for y in range(maze_size):
+        row = []
         for x in range(maze_size):
-            coord = (y, x)
-            if coord == player_pos:
-                result += "😊"
-            elif coord == goal:
-                result += "⛩"
-            elif coord in heart_positions:
-                result += "💎"
-            elif coord in portal_positions:
-                result += "🌀"
-            elif maze[y][x] == "⬛" or coord in extra_walls:
-                result += "⬛"
+            c = (y, x)
+            if c == player_pos:
+                row.append("😊")
+            elif c == goal:
+                row.append("⛩")
+            elif c in heart_positions:
+                row.append("💎")
+            elif c in portal_positions:
+                row.append("🌀")
+            elif maze[y][x] == "⬛" or c in extra_walls:
+                row.append("⬛")
             else:
-                result += maze[y][x]
-        result += "\n"
-    return result.strip()
+                row.append(maze[y][x])
+        res.append("".join(row))
+    return "\n".join(res)
 
 # 🏎 強化版賽車遊戲（修正版）
 # ------------------------------------------------------------
