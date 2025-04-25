@@ -82,6 +82,22 @@ def reply_audio(reply_token, original_content_url, duration):
     }
     requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
 
+# ========== 同時回傳文字 + 音檔 ==========
+
+def reply_text_audio(reply_token, text_msg, audio_url, duration):
+    headers = {
+        "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    body = {
+        "replyToken": reply_token,
+        "messages": [
+            {"type": "text", "text": text_msg},
+            {"type": "audio", "originalContentUrl": audio_url, "duration": duration}
+        ]
+    }
+    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
+
 # ========== 音檔清單 ==========
 audio_files = [
     "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)13.wav",
@@ -119,9 +135,6 @@ maze[3][1] = "⬜"
 maze[4][3] = "⬜"
 maze[5][2] = "⬜"
 
-start = (1,1)
-goal = (maze_size-2, maze_size-2)
-maze[goal[0]][goal[1]] = "⛩"
 players = {}
 quiz_positions = [(random.randint(1, maze_size-2), random.randint(1, maze_size-2)) for _ in range(5)]
 
@@ -138,6 +151,7 @@ dart_words = {
     "いぬ": ("inu", "狗"),
     "ねこ": ("neko", "貓")
 }
+
 dart_sessions = {}
 
 @app.route("/callback", methods=["POST"])
