@@ -428,7 +428,7 @@ def maze_game(user: str, raw_msg: str) -> Dict[str, Any]:
                     "message": f"❓ 先回答題目：「{kana}」羅馬拼音？\n{opts}"}
 
         correct = (choice_map[msg] == ans)
-        feedback = "✅ 正確！" if correct else "❌ 錯誤，再試一次！"
+        feedback = "✅ 正確，請繼續前進！" if correct else "❌ 錯誤，再試一次！"
         if correct:
             player["quiz"] = None
         opts = "\n".join([f"{k}. {v}" for k, v in choice_map.items()])
@@ -455,16 +455,18 @@ def maze_game(user: str, raw_msg: str) -> Dict[str, Any]:
     info_line = []  # 蒐集提示訊息
 
     # --- 3-4. 傳送門（>1 個才傳；最多 10 hops） -----------------------
-    hop = 0
-    while len(portal_positions) > 1 and player["pos"] in portal_positions:
-        hop += 1
-        if hop > 10:
-            player["pos"] = start
-            info_line.append("⚠️ 傳送異常，已送回起點。")
-            break
-        dest = random.choice(list(portal_positions - {player["pos"]}))
-        player["pos"] = dest
-        info_line.append("🌀 傳送門啟動！")
+hop = 0
+while (len(portal_positions) > 1 and
+       player["pos"] in portal_positions and
+       player["pos"] != goal):
+    hop += 1
+    if hop > 10:
+        player["pos"] = start
+        info_line.append("⚠️ 傳送異常，已送回起點。")
+        break
+    dest = random.choice(list(portal_positions - {player["pos"]}))
+    player["pos"] = dest
+    info_line.append("🌀 傳送門啟動！")
 
     # --- 3-5. 撿寶石 --------------------------------------------------
     if player["pos"] in heart_positions:
@@ -474,25 +476,24 @@ def maze_game(user: str, raw_msg: str) -> Dict[str, Any]:
         info_line.append("💎 撿到寶石！（+2 分）")
 
     # --- 3-6. 抵達終點 ------------------------------------------------
-    if player["pos"] == goal:
-        score, gems = player["score"], player["items"]
+if player["pos"] == goal:
+    score, gems = player["score"], player["items"]
 
-        # 清除玩家狀態
-        players.pop(user, None)
+    # 清除玩家狀態
+    players.pop(user, None)
 
-        # 重置可變元素（讓下一局乾淨）
-        heart_positions  = set(INIT_HEARTS)
-        portal_positions = set(INIT_PORTALS)
-        extra_walls      = _build_extra_walls()
+    # 重置可變元素（讓下一局乾淨）
+    heart_positions  = set(INIT_HEARTS)
+    portal_positions = set(INIT_PORTALS)
+    extra_walls      = _build_extra_walls()
 
-        encour = ("🌟 迷宮大師！" if score >= 10 else
-                  "👍 表現不錯，再接再厲！" if score >= 5 else
-                  "💪 加油！多多練習會更好！")
-        return {"map": render_map(goal),
-                "message": f"🎉 抵達終點！{encour}\n"
-                           f"共 {score} 分、{gems} 顆寶石！\n"
-                           "➡️ 輸入『主選單』重新開始"}
-
+    encour = ("🌟 迷宮大師！" if score >= 10 else
+              "👍 表現不錯，再接再厲！" if score >= 5 else
+              "💪 加油！多多練習會更好！")
+    return {"map": render_map(goal),
+            "message": f"🎉 抵達終點！{encour}\n"
+                       f"共 {score} 分、{gems} 顆寶石！\n"
+                       "➡️ 輸入『主選單』重新開始"}
     # --- 3-7. 隨機 / 指定出題 ---------------------------------------
     if (player["pos"] in quiz_positions) or (random.random() < 0.4):
         kana, ans = random.choice(list(kana_dict.items()))
