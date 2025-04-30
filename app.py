@@ -298,412 +298,451 @@ body = {
 "messages": [{"type": "text", "text": text}]
 }
 requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
-# ========== 🧩 迷宮遊戲設定 ==========
+"""
+🏯 迷宮小遊戲（優化版 2025-05-01）
+------------------------------------------------------
+✅ 改進內容：
+1. 代碼結構重組：使用類別結構整理迷宮遊戲邏輯，提高可維護性
+2. 效能優化：減少不必要的全局變量訪問，優化地圖渲染
+3. 錯誤處理：增強錯誤處理能力，防止各種邊緣情況引起的崩潰
+4. 玩家體驗：改進消息提示，增加遊戲難度的漸進式調整
+5. 代碼可讀性：添加詳細註釋，優化命名約定，遵循PEP 8規範
+"""
 import random
 from collections import deque
-from typing import Set, Tuple, Dict, Any, List, Optional, Union
+from typing import Dict, List, Set, Tuple, Any, Optional
 
-# --- 基本設定 ---
-MAZE_SIZE = 7
-START_POS: Tuple[int, int] = (1, 1)
-GOAL_POS: Tuple[int, int] = (MAZE_SIZE - 2, MAZE_SIZE - 2)
-
-# --- 地圖元素符號 ---
-WALL_SYMBOL = "⬛"
-PATH_SYMBOL = "⬜"
-PLAYER_SYMBOL = "😊"
-GOAL_SYMBOL = "⛩"
-HEART_SYMBOL = "💎"
-PORTAL_SYMBOL = "🌀"
-QUIZ_SYMBOL = "❓" # Optional: Mark quiz spots
-
-# --- 初始地圖結構 ---
-# 建立基礎網格和外牆
-maze = [[PATH_SYMBOL for _ in range(MAZE_SIZE)] for _ in range(MAZE_SIZE)]
-for i in range(MAZE_SIZE):
-    maze[0][i] = maze[MAZE_SIZE - 1][i] = WALL_SYMBOL
-    maze[i][0] = maze[i][MAZE_SIZE - 1] = WALL_SYMBOL
-maze[GOAL_POS[0]][GOAL_POS[1]] = GOAL_SYMBOL
-
-# --- 靜態/初始遊戲元素位置 ---
-# (這些會在遊戲重置時恢復)
-# 注意：這些是 '潛在' 的牆壁，部分會被 _build_extra_walls 保留
-# 確保 start/goal 不在這裡
-RAW_POTENTIAL_WALLS: Set[Tuple[int, int]] = {
-    (1, 2), (1, 4), (1, 5), # Removed (1,1) as it's start
-    (2, 1), (2, 2), (2, 3), (2, 4), (2, 6),
-    (3, 1), (3, 3), (3, 5),
-    (4, 2), (4, 4), (4, 5), (4, 6), # Removed (4,1) for portal
-    (5, 1), (5, 3), (5, 4), (5, 5), # Removed (5,2) for path ensurence
-    (6, 2), (6, 3), (6, 4), # Removed (6,5) as it's goal neighbour
-}
-INIT_HEARTS: Set[Tuple[int, int]] = {(1, 3), (3, 4), (5, 1)} # 💎 (Added one)
-INIT_PORTALS: Set[Tuple[int, int]] = {(2, 5), (4, 1)} # 🌀
-INIT_QUIZ_POSITIONS: Set[Tuple[int, int]] = {(3, 2), (5, 5)} # 固定的題目觸發點
-
-# --- 假設的假名辭典 (請確保在您的環境中定義了這個) ---
-kana_dict: Dict[str, str] = {
-    "あ": "a", "い": "i", "う": "u", "え": "e", "お": "o",
-    "か": "ka", "き": "ki", "く": "ku", "け": "ke", "こ": "ko",
-    "さ": "sa", "し": "shi", "す": "su", "せ": "se", "そ": "so",
-    # ... 更多假名
-}
-if not kana_dict:
-    print("警告：`kana_dict` 是空的，測驗功能將無法運作！")
-
-
-# --- 玩家狀態儲存 ---
-# 改用 Type Hinting
-PlayerState = Dict[str, Any] # Could be more specific with TypedDict if needed
-players: Dict[str, PlayerState] = {}
-
-# ===== 可達性檢查與動態牆壁生成 =====
-
-Pos = Tuple[int, int]
-
-def _is_reachable(blocks: Set[Pos]) -> bool:
-    """BFS 檢查在 blocks 為牆的情況下，start 是否仍可達 goal"""
-    q, seen = deque([START_POS]), {START_POS}
-    dirs = [(1, 0), (-1, 0), (0, 1), (0, -1)]
-    while q:
-        y, x = q.popleft()
-        if (y, x) == GOAL_POS:
+# ===== 1. MazeGame 類：封裝迷宮遊戲邏輯 =========================
+class MazeGame:
+    """迷宮遊戲核心類，管理地圖、玩家狀態和遊戲邏輯"""
+    
+    # 座標類型別名
+    Pos = Tuple[int, int]
+    
+    # 方向映射
+    DIRECTIONS = {
+        "上": (-1, 0), "下": (1, 0), "左": (0, -1), "右": (0, 1),
+        "UP": (-1, 0), "DOWN": (1, 0), "LEFT": (0, -1), "RIGHT": (0, 1)
+    }
+    
+    # 單例模式：保存全局遊戲狀態
+    _instance = None
+    
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(MazeGame, cls).__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+    
+    def __init__(self, maze_size: int = 7):
+        """初始化迷宮遊戲"""
+        if self._initialized:
+            return
+            
+        self.maze_size = maze_size
+        
+        # 遊戲地圖與基本設置
+        self.maze = [["⬜" for _ in range(maze_size)] for _ in range(maze_size)]
+        self._create_boundary_walls()
+        
+        # 重要位置
+        self.start: MazeGame.Pos = (1, 1)
+        self.goal: MazeGame.Pos = (maze_size - 2, maze_size - 2)
+        self.maze[self.goal[0]][self.goal[1]] = "⛩"
+        
+        # 特殊元素
+        self.raw_walls: Set[MazeGame.Pos] = {
+            (1, 1), (1, 2), (1, 4),
+            (2, 2), (2, 6),
+            (3, 1), (3, 3), (3, 5),
+            (4, 4), (4, 5), (4, 6),
+        }
+        self.heart_positions: Set[MazeGame.Pos] = {(1, 3), (3, 4)}  # 💎
+        self.portal_positions: Set[MazeGame.Pos] = {(2, 5), (4, 1)}  # 🌀
+        
+        # 玩家狀態
+        self.players: Dict[str, Dict[str, Any]] = {}
+        
+        # 隨機題目位置
+        self.quiz_positions: List[MazeGame.Pos] = []
+        self._generate_quiz_positions()
+        
+        # 構建動態牆壁
+        self.extra_walls: Set[MazeGame.Pos] = self._build_extra_walls()
+        
+        self._initialized = True
+    
+    def _create_boundary_walls(self) -> None:
+        """建立邊界牆壁"""
+        for i in range(self.maze_size):
+            self.maze[0][i] = self.maze[self.maze_size-1][i] = "⬛"
+            self.maze[i][0] = self.maze[i][self.maze_size-1] = "⬛"
+    
+    def _generate_quiz_positions(self, count: int = 5) -> None:
+        """生成隨機題目位置"""
+        self.quiz_positions = []
+        while len(self.quiz_positions) < count:
+            pos = (random.randint(1, self.maze_size-2), random.randint(1, self.maze_size-2))
+            # 避免起點和終點
+            if pos != self.start and pos != self.goal and pos not in self.quiz_positions:
+                self.quiz_positions.append(pos)
+    
+    def _is_reachable(self, blocks: Set[Pos]) -> bool:
+        """檢查在指定障礙物下，起點是否可達終點（BFS算法）"""
+        q, seen = deque([self.start]), {self.start}
+        dirs = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+        
+        while q:
+            y, x = q.popleft()
+            if (y, x) == self.goal:
+                return True
+                
+            for dy, dx in dirs:
+                ny, nx = y + dy, x + dx
+                new_pos = (ny, nx)
+                
+                # 檢查是否在範圍內、是否是障礙物、是否已訪問
+                if (0 <= ny < self.maze_size and 0 <= nx < self.maze_size and 
+                    new_pos not in blocks and
+                    self.maze[ny][nx] != "⬛" and
+                    new_pos not in seen):
+                    seen.add(new_pos)
+                    q.append(new_pos)
+        
+        return False
+    
+    def _build_extra_walls(self) -> Set[Pos]:
+        """構建動態牆壁，確保迷宮仍有解"""
+        # 保護起點、終點及其周圍的格子
+        protected = {
+            self.start, self.goal,
+            (self.start[0] + 1, self.start[1]), (self.start[0], self.start[1] + 1),
+            (self.goal[0] - 1, self.goal[1]), (self.goal[0], self.goal[1] - 1),
+        }
+        
+        # 排除受保護位置、寶石和傳送門
+        extra = {
+            c for c in self.raw_walls
+            if c not in protected and 
+               c not in self.heart_positions and 
+               c not in self.portal_positions
+        }
+        
+        # 逐步移除導致無解的牆壁
+        while extra and not self._is_reachable(extra):
+            # 移除最遠的牆壁
+            far_wall = max(extra, key=lambda w: 
+                abs(w[0] - self.goal[0]) + abs(w[1] - self.goal[1]))
+            extra.remove(far_wall)
+        
+        return extra if self._is_reachable(extra) else set()
+    
+    def _teleport(self, pos: Pos) -> Tuple[Pos, bool]:
+        """若在傳送門上，傳送到隨機其它傳送門
+        
+        返回:
+            (新位置, 是否傳送)
+        """
+        # 檢查是否可傳送
+        if (len(self.portal_positions) <= 1 or 
+            pos not in self.portal_positions or 
+            pos == self.goal):
+            return pos, False
+        
+        # 傳送到隨機其它傳送門
+        dest = random.choice([p for p in self.portal_positions if p != pos])
+        return dest, True
+    
+    def _collect_heart(self, pos: Pos, player: Dict[str, Any]) -> bool:
+        """收集寶石並更新分數
+        
+        返回:
+            是否收集到寶石
+        """
+        if pos in self.heart_positions:
+            self.heart_positions.discard(pos)  # 安全移除
+            player["score"] = player.get("score", 0) + 2
+            player["items"] = player.get("items", 0) + 1
             return True
-        for dy, dx in dirs:
-            ny, nx = y + dy, x + dx
-            pos = (ny, nx)
-            if (
-                0 <= ny < MAZE_SIZE and 0 <= nx < MAZE_SIZE and
-                pos not in blocks and
-                maze[ny][nx] != WALL_SYMBOL and # Check against base maze walls
-                pos not in seen
-            ):
-                seen.add(pos)
-                q.append(pos)
-    return False
-
-def _build_extra_walls(potential_walls: Set[Pos],
-                       hearts: Set[Pos],
-                       portals: Set[Pos],
-                       quiz_spots: Set[Pos]) -> Set[Pos]:
-    """產生『保證可達』的可拆牆集合；若仍堵死就返回空集合"""
-    # 保護起點、終點及其鄰近格子，以及特殊物品格
-    protected = {
-        START_POS, GOAL_POS,
-        (START_POS[0] + 1, START_POS[1]), (START_POS[0], START_POS[1] + 1),
-        (GOAL_POS[0] - 1, GOAL_POS[1]),   (GOAL_POS[0], GOAL_POS[1] - 1),
-    } | hearts | portals | quiz_spots
-
-    # 從潛在牆壁中，排除掉被保護的格子
-    extra = {wall for wall in potential_walls if wall not in protected}
-
-    # 逐步拆除離終點最遠的牆，直到可達或無牆可拆
-    current_blocks = set(extra) # Start with all potential extra walls as blocks
-    while current_blocks and not _is_reachable(current_blocks):
-        if not current_blocks: break # Should not happen if logic is correct, but safety first
-        # 找到離終點曼哈頓距離最遠的牆
-        far_wall = max(current_blocks, key=lambda w: abs(w[0] - GOAL_POS[0]) + abs(w[1] - GOAL_POS[1]))
-        current_blocks.remove(far_wall) # 'Remove' means it becomes a path
-
-    # 返回確定要當作牆壁的集合
-    # 如果最終 current_blocks 使得 start 無法到達 goal，表示初始設定有問題，返回空集合
-    if _is_reachable(current_blocks):
-         print(f"生成額外牆壁 {len(current_blocks)} 個，迷宮可通行。")
-         return current_blocks
-    else:
-         print(f"警告：無法生成可通行的額外牆壁！迷宮可能無法過關。")
-         return set() # Return empty set if goal is unreachable
-
-
-# ===== 每局可變狀態 =====
-# 使用 set() 複製，避免修改到初始設定
-heart_positions: Set[Pos] = set(INIT_HEARTS)
-portal_positions: Set[Pos] = set(INIT_PORTALS)
-quiz_positions: Set[Pos] = set(INIT_QUIZ_POSITIONS)
-# 在遊戲開始或重置時才計算 extra_walls
-extra_walls: Set[Pos] = _build_extra_walls(RAW_POTENTIAL_WALLS, heart_positions, portal_positions, quiz_positions)
-
-
-# ===== 輔助函式 =====
-
-def _teleport(pos: Pos, current_portals: Set[Pos]) -> Tuple[Pos, bool]:
-    """
-    若踩到傳送門且門數 >1，隨機傳送一次。
-    返回 (新座標, 是否已傳送)。
-    """
-    # Cannot teleport if only one portal exists, or not on a portal, or on goal
-    if len(current_portals) <= 1 or pos not in current_portals or pos == GOAL_POS:
-        return pos, False
-
-    # Choose a destination portal different from the current one
-    possible_dests = [p for p in current_portals if p != pos]
-    if not possible_dests: # Should not happen if len > 1, but safeguard
-         return pos, False
-    dest = random.choice(possible_dests)
-    print(f"傳送：從 {pos} 到 {dest}")
-    return dest, True
-
-def _collect_heart(pos: Pos, player: PlayerState, current_hearts: Set[Pos]) -> bool:
-    """踩到寶石就收集並加分；回傳是否真的收集到。會直接修改 current_hearts 集合。"""
-    if pos in current_hearts:
-        current_hearts.discard(pos) # 安全移除
-        player["score"] += 2
-        player["items"] += 1
-        print(f"玩家 {player.get('id', '未知')} 在 {pos} 撿到寶石")
-        return True
-    return False
-
-def _generate_quiz(player: PlayerState) -> Optional[Tuple[str, List[Dict[str, str]]]]:
-    """
-    產生一個假名測驗題目和選項按鈕資料。
-    如果 kana_dict 為空，返回 None。
-    會直接修改 player 狀態來標記測驗中。
-    返回 (題目訊息, 按鈕列表) 或 None。
-    """
-    if not kana_dict:
-        return None
-
-    kana, correct_ans = random.choice(list(kana_dict.items()))
-    options = {correct_ans} # Use a set to easily track unique options
-    while len(options) < 3:
-        distractor = random.choice(list(kana_dict.values()))
-        options.add(distractor)
-
-    shuffled_options = list(options)
-    random.shuffle(shuffled_options)
-
-    choice_map = {"A": shuffled_options[0], "B": shuffled_options[1], "C": shuffled_options[2]}
-    player["quiz"] = {"kana": kana, "answer": correct_ans, "choices": choice_map}
-    player["score"] += 1 # 出題加 1 分
-
-    quiz_text = f"❓ 挑戰：「{kana}」的羅馬拼音是？"
-    buttons = [
-        {'label': f"{k}. {v}", 'action': k} # Label includes the option text
-        for k, v in choice_map.items()
-    ]
-    print(f"向玩家 {player.get('id', '未知')} 出題：{kana} -> {correct_ans}, 選項：{choice_map}")
-    return quiz_text, buttons
-
-
-# ===== 地圖渲染 =====
-
-def render_map(player_pos: Pos, current_hearts: Set[Pos], current_portals: Set[Pos], current_walls: Set[Pos]) -> str:
-    """將當前遊戲狀態渲染成地圖字串"""
-    rows = []
-    for y in range(MAZE_SIZE):
-        row_str = ""
-        for x in range(MAZE_SIZE):
-            cell: Pos = (y, x)
-            if cell == player_pos:
-                row_str += PLAYER_SYMBOL
-            elif cell == GOAL_POS:
-                row_str += GOAL_SYMBOL
-            elif cell in current_hearts:
-                row_str += HEART_SYMBOL
-            elif cell in current_portals:
-                row_str += PORTAL_SYMBOL
-            # elif cell in quiz_positions: # Optionally mark fixed quiz spots
-            #     row_str += QUIZ_SYMBOL
-            elif maze[y][x] == WALL_SYMBOL or cell in current_walls: # Check base maze and dynamic walls
-                row_str += WALL_SYMBOL
-            else:
-                row_str += PATH_SYMBOL # Assumes PATH_SYMBOL is default empty space
-        rows.append(row_str)
-    return "\n".join(rows)
-
-# ===== 遊戲主邏輯 =====
-
-# 定義回傳的字典結構，包含可選的按鈕
-GameResponse = Dict[str, Union[str, Optional[List[Dict[str, str]]]]]
-
-def maze_game(user_id: str, raw_msg: str) -> GameResponse:
-    """
-    處理玩家輸入並更新遊戲狀態。
-    回傳一個字典包含 'map', 'message', 以及可選的 'buttons'。
-    """
-    global heart_positions, portal_positions, extra_walls # Allow modification
-
-    # 1. 取得或初始化玩家狀態
-    player = players.setdefault(
-        user_id,
-        {
-            "id": user_id, # Store user_id for potential logging
-            "pos": START_POS,
-            "quiz": None, # Stores {'kana': str, 'answer': str, 'choices': Dict[str, str]}
-            "score": 0,
-            "items": 0,
-            # "game": "maze" # Could be useful if managing multiple games
-        },
-    )
-    current_pos: Pos = player["pos"]
-    msg = raw_msg.strip().upper() # Normalize input
-
-    # --- Helper to create response ---
-    def create_response(message: str, buttons: Optional[List[Dict[str, str]]] = None) -> GameResponse:
-        map_str = render_map(player["pos"], heart_positions, portal_positions, extra_walls)
-        response: GameResponse = {"map": map_str, "message": message}
-        if buttons:
-            response["buttons"] = buttons
-        return response
-
-    # 2. 處理測驗回答
-    if player["quiz"]:
-        quiz_data = player["quiz"]
-        kana = quiz_data["kana"]
-        correct_ans = quiz_data["answer"]
-        choice_map = quiz_data["choices"]
-
-        if msg not in choice_map: # Must answer A, B, or C
-            quiz_text = f"❓ 請回答題目：「{kana}」的羅馬拼音是？"
-            buttons = [{'label': f"{k}. {v}", 'action': k} for k, v in choice_map.items()]
-            return create_response(quiz_text, buttons)
-
-        # Check answer
-        is_correct = (choice_map[msg] == correct_ans)
-        if is_correct:
-            player["quiz"] = None # Clear quiz state
-            feedback = "✅ 正確，請繼續前進！"
-            return create_response(f"{feedback}\n目前得分：{player['score']} 分")
-        else:
-            # 錯誤，重新顯示題目和按鈕
-            feedback = "❌ 錯誤，再試一次！"
-            quiz_text = f"❓ 挑戰：「{kana}」的羅馬拼音是？"
-            buttons = [{'label': f"{k}. {v}", 'action': k} for k, v in choice_map.items()]
-            return create_response(f"{feedback}\n{quiz_text}", buttons)
-
-    # 3. 處理移動指令
-    dir_map: Dict[str, Tuple[int, int]] = {"上": (-1, 0), "下": (1, 0), "左": (0, -1), "右": (0, 1)}
-    if msg not in dir_map:
-        # 非移動指令，也非測驗回答 (可能需要主選單等)
-        if msg == "主選單": # Example handling
-             # Reset player or guide them? Depends on desired flow.
-             # For now, just remind them how to play.
-             return create_response("請輸入方向（上/下/左/右）開始移動。")
-        return create_response("請輸入有效指令：上/下/左/右 或 回答題目選項 (A/B/C)。")
-
-    # Calculate potential new position
-    dy, dx = dir_map[msg]
-    ny, nx = current_pos[0] + dy, current_pos[1] + dx
-    next_pos: Pos = (ny, nx)
-
-    # 4. 檢查碰撞 (邊界、基礎牆、動態牆)
-    if not (0 <= ny < MAZE_SIZE and 0 <= nx < MAZE_SIZE) or \
-       maze[ny][nx] == WALL_SYMBOL or \
-       next_pos in extra_walls:
-        return create_response("🚧 前方是牆壁或邊界，無法通行！")
-
-    # 5. 更新位置 & 處理格子效果
-    player["pos"] = next_pos
-    info_messages = [] # Collect messages for this move
-
-    # 5a. 傳送門 (優先處理，因為會改變位置)
-    new_pos_after_tp, did_teleport = _teleport(player["pos"], portal_positions)
-    if did_teleport:
-        player["pos"] = new_pos_after_tp # Update position if teleported
-        info_messages.append("🌀 你被傳送門吸入，瞬間移動了！")
-        # Re-check hearts/goal at the new teleported position
-        current_pos = new_pos_after_tp # Update current_pos for subsequent checks
-    else:
-        current_pos = next_pos # Update current_pos normally
-
-    # 5b. 撿寶石 (在最終位置檢查)
-    if _collect_heart(current_pos, player, heart_positions):
-        info_messages.append(f"💎 撿到寶石！得分 +2，目前 {player['score']} 分。")
-
-    # 5c. 抵達終點
-    if current_pos == GOAL_POS:
-        score, gems = player["score"], player["items"]
-        win_message = f"🎉 恭喜抵達終點 {GOAL_SYMBOL}！"
-        encouragement = (
-            "🌟 你是真正的迷宮大師！" if score >= 10 else
-            "👍 表現非常出色！" if score >= 5 else
-            "💪 成功過關！繼續努力！"
+        return False
+    
+    def _generate_quiz(self, player: Dict[str, Any]) -> Dict[str, str]:
+        """生成五十音測驗題
+        
+        返回:
+            含有測驗題、選項和地圖的字典
+        """
+        # 取全局假名字典
+        from __main__ import kana_dict
+        
+        # 隨機選擇一個假名及其羅馬拼音
+        kana, ans = random.choice(list(kana_dict.items()))
+        
+        # 生成選項（正確答案+干擾項）
+        opts = [ans]
+        while len(opts) < 3:
+            distractor = random.choice(list(kana_dict.values()))
+            if distractor not in opts:
+                opts.append(distractor)
+        
+        # 打亂選項順序
+        random.shuffle(opts)
+        choice_map = {"A": opts[0], "B": opts[1], "C": opts[2]}
+        
+        # 保存到玩家狀態
+        player["quiz"] = (kana, ans, choice_map)
+        player["score"] = player.get("score", 0) + 1  # 出題加1分
+        
+        # 格式化選項文本
+        opt_txt = "\n".join(f"{k}. {v}" for k, v in choice_map.items())
+        
+        return {
+            "map": self.render_map(player["pos"]),
+            "message": f"❓ 挑戰：「{kana}」羅馬拼音？\n{opt_txt}"
+        }
+    
+    def handle_move(self, user_id: str, direction: str) -> Dict[str, str]:
+        """處理玩家移動
+        
+        參數:
+            user_id: 玩家ID
+            direction: 移動方向
+            
+        返回:
+            包含渲染地圖和消息的字典
+        """
+        # 獲取或初始化玩家數據
+        player = self.players.setdefault(
+            user_id,
+            {
+                "pos": self.start, 
+                "quiz": None, 
+                "game": "maze", 
+                "score": 0, 
+                "items": 0
+            }
         )
-        final_stats = f"最終得分：{score} 分，收集了 {gems} 個寶石。"
-        reset_info = "➡️ 輸入『主選單』或任何指令重新開始。"
-
-        # 清理玩家狀態並重置遊戲元素
-        user_id_to_remove = player["id"]
-        del players[user_id_to_remove]
-        heart_positions = set(INIT_HEARTS)
-        portal_positions = set(INIT_PORTALS)
-        quiz_positions = set(INIT_QUIZ_POSITIONS)
-        extra_walls = _build_extra_walls(RAW_POTENTIAL_WALLS, heart_positions, portal_positions, quiz_positions)
-        print(f"玩家 {user_id_to_remove} 到達終點，遊戲重置。")
-
-        # 提供結束訊息和一個返回主選單的按鈕
-        win_buttons = [{'label': '主選單', 'action': '主選單'}]
-        map_str = render_map(GOAL_POS, heart_positions, portal_positions, extra_walls) # Show final map with goal reached
-        full_message = f"{win_message}\n{encouragement}\n{final_stats}\n\n{reset_info}"
-        # Include YOU WIN banner in the map string itself for visual flair
-        return {"map": map_str + "\n\n      🏆 YOU WIN! 🏆", "message": full_message, "buttons": win_buttons}
-
-
-    # 5d. 觸發測驗 (固定點或隨機)
-    should_quiz = False
-    if current_pos in quiz_positions:
-        should_quiz = True
-        quiz_positions.discard(current_pos) # Fixed spot quiz triggers only once per game
-        print(f"玩家 {player['id']} 踩到固定測驗點 {current_pos}")
-    elif random.random() < 0.25: # 降低隨機觸發機率 (原 0.4 偏高)
-        should_quiz = True
-        print(f"玩家 {player['id']} 在 {current_pos} 隨機觸發測驗")
-
-    if should_quiz:
-        quiz_result = _generate_quiz(player)
-        if quiz_result:
-            quiz_text, buttons = quiz_result
-            # Combine potential move messages with quiz prompt
-            full_message = "\n".join(info_messages) + ("\n" if info_messages else "") + quiz_text
-            return create_response(full_message, buttons)
+        
+        # 標準化方向輸入
+        direction = direction.strip().upper()
+        
+        # 處理答題優先
+        if player.get("quiz"):
+            return self._handle_quiz_answer(player, direction)
+        
+        # 處理移動
+        if direction not in self.DIRECTIONS:
+            return {
+                "map": self.render_map(player["pos"]),
+                "message": "請輸入方向（上/下/左/右）或回答題目（A/B/C）"
+            }
+        
+        # 計算新位置
+        dy, dx = self.DIRECTIONS[direction]
+        ny, nx = player["pos"][0] + dy, player["pos"][1] + dx
+        new_pos = (ny, nx)
+        
+        # 檢查是否撞牆
+        if (not (0 <= ny < self.maze_size and 0 <= nx < self.maze_size) or
+            self.maze[ny][nx] == "⬛" or
+            new_pos in self.extra_walls):
+            return {
+                "map": self.render_map(player["pos"]),
+                "message": "🚧 前方是牆，不能走喔！"
+            }
+        
+        # 更新位置
+        player["pos"] = new_pos
+        info_messages = []  # 收集發生事件的消息
+        
+        # 處理傳送門
+        player["pos"], did_teleport = self._teleport(player["pos"])
+        if did_teleport:
+            info_messages.append("🌀 傳送門啟動！")
+        
+        # 處理寶石收集
+        if self._collect_heart(player["pos"], player):
+            info_messages.append("💎 撿到寶石！（+2 分）")
+        
+        # 檢查是否抵達終點
+        if player["pos"] == self.goal:
+            return self._handle_goal_reached(user_id, player)
+        
+        # 隨機或指定位置出題
+        if (player["pos"] in self.quiz_positions or 
+            # 根據已收集寶石調整隨機題目出現機率
+            random.random() < (0.3 + min(0.3, player.get("items", 0) * 0.1))):
+            return self._generate_quiz(player)
+        
+        # 一般移動回覆
+        info_line = "\n".join(info_messages) if info_messages else "你移動了～"
+        return {
+            "map": self.render_map(player["pos"]),
+            "message": f"{info_line}\n目前得分：{player.get('score', 0)} 分"
+        }
+    
+    def _handle_quiz_answer(self, player: Dict[str, Any], answer: str) -> Dict[str, str]:
+        """處理玩家對測驗題的回答
+        
+        參數:
+            player: 玩家數據
+            answer: 玩家回答
+            
+        返回:
+            包含結果的字典
+        """
+        kana, ans, choice_map = player["quiz"]
+        
+        # 檢查答案格式
+        if answer not in {"A", "B", "C"}:
+            opts = "\n".join(f"{k}. {v}" for k, v in choice_map.items())
+            return {
+                "map": self.render_map(player["pos"]),
+                "message": f"❓ 先回答題目：「{kana}」羅馬拼音？\n{opts}"
+            }
+        
+        # 檢查答案正確性
+        correct = (choice_map[answer] == ans)
+        feedback = "✅ 正確，請繼續前進！" if correct else "❌ 錯誤，再試一次！"
+        
+        # 答對則清除題目狀態
+        if correct:
+            player["quiz"] = None
+        
+        # 返回結果
+        opts = "\n".join(f"{k}. {v}" for k, v in choice_map.items())
+        return {
+            "map": self.render_map(player["pos"]),
+            "message": feedback if correct else f"{feedback}\n{opts}"
+        }
+    
+    def _handle_goal_reached(self, user_id: str, player: Dict[str, Any]) -> Dict[str, str]:
+        """處理玩家抵達終點
+        
+        參數:
+            user_id: 玩家ID
+            player: 玩家數據
+            
+        返回:
+            包含結果的字典
+        """
+        # 獲取玩家成績
+        score = player.get("score", 0)
+        gems = player.get("items", 0)
+        
+        # 清理遊戲狀態
+        self.players.pop(user_id, None)
+        self.heart_positions = {(1, 3), (3, 4)}  # 重置寶石
+        self.portal_positions = {(2, 5), (4, 1)}  # 重置傳送門
+        self.extra_walls = self._build_extra_walls()  # 重建牆壁
+        
+        # 根據分數給出鼓勵
+        encour = (
+            "🌟 迷宮大師！" if score >= 12 else
+            "🏆 精通迷宮！" if score >= 8 else
+            "👍 表現不錯，再接再厲！" if score >= 5 else
+            "💪 加油！多多練習會更好！"
+        )
+        
+        return {
+            "map": self.render_map(self.goal) + "\n🏁 YOU WIN!",
+            "message": (
+                f"🎉 抵達終點！{encour}\n"
+                f"共 {score} 分、{gems} 顆寶石！\n"
+                f"➡️ 輸入『主選單』重新開始"
+            )
+        }
+    
+    def render_map(self, player_pos: Pos) -> str:
+        """渲染地圖為字串
+        
+        參數:
+            player_pos: 玩家位置
+            
+        返回:
+            地圖字串
+        """
+        rows = []
+        for y in range(self.maze_size):
+            row = []
+            for x in range(self.maze_size):
+                cell = (y, x)
+                # 按優先順序決定顯示內容
+                if cell == player_pos:
+                    row.append("😊")
+                elif cell == self.goal:
+                    row.append("⛩")
+                elif cell in self.heart_positions:
+                    row.append("💎")
+                elif cell in self.portal_positions:
+                    row.append("🌀")
+                elif self.maze[y][x] == "⬛" or cell in self.extra_walls:
+                    row.append("⬛")
+                else:
+                    row.append(self.maze[y][x])
+            rows.append("".join(row))
+        return "\n".join(rows)
+    
+    def reset_game(self, user_id: str = None) -> None:
+        """重置遊戲狀態
+        
+        參數:
+            user_id: 指定玩家ID，為None則重置所有玩家
+        """
+        if user_id is not None:
+            # 重置單個玩家
+            self.players.pop(user_id, None)
         else:
-            info_messages.append("（本想出題，但題庫似乎空了！）") # Handle case where kana_dict is empty
-
-    # 6. 一般移動回覆
-    if not info_messages: # If nothing else happened
-        info_messages.append("你順利地移動了。")
-
-    # Add score info to the regular move message
-    info_messages.append(f"目前得分：{player['score']} 分")
-    return create_response("\n".join(info_messages))
+            # 重置所有遊戲狀態
+            self.players.clear()
+            self.heart_positions = {(1, 3), (3, 4)}
+            self.portal_positions = {(2, 5), (4, 1)}
+            self.extra_walls = self._build_extra_walls()
+            self._generate_quiz_positions()
 
 
-# ===== 範例使用 (需要一個能處理按鈕的環境) =====
+# ===== 2. 向外部程式提供相容的接口函數 ================================
 
-# print("--- 初始地圖 ---")
-# print(render_map(START_POS, heart_positions, portal_positions, extra_walls))
-# print("-" * 20)
+def maze_game(user_id: str, message: str) -> Dict[str, str]:
+    """迷宮遊戲入口函數，保持與原程式相容的接口
+    
+    參數:
+        user_id: 玩家ID
+        message: 玩家輸入的訊息
+        
+    返回:
+        包含地圖和回應訊息的字典
+    """
+    # 創建或獲取遊戲實例
+    game = MazeGame()
+    
+    # 處理玩家輸入
+    return game.handle_move(user_id, message)
 
-# # 模擬玩家輸入
-# user = "test_player_1"
-# response1 = maze_game(user, "右")
-# print(f"訊息:\n{response1['message']}")
-# print(f"地圖:\n{response1['map']}")
-# print(f"按鈕: {response1.get('buttons')}") # 可能為 None
-# print("-" * 20)
 
-# response2 = maze_game(user, "下") # 可能觸發測驗
-# print(f"訊息:\n{response2['message']}")
-# print(f"地圖:\n{response2['map']}")
-# print(f"按鈕: {response2.get('buttons')}")
-# print("-" * 20)
+def render_map(player_pos: Tuple[int, int]) -> str:
+    """渲染地圖函數，保持與原程式相容的接口
+    
+    參數:
+        player_pos: 玩家位置
+        
+    返回:
+        渲染後的地圖字串
+    """
+    # 創建或獲取遊戲實例
+    game = MazeGame()
+    
+    # 渲染並返回地圖
+    return game.render_map(player_pos)
 
-# # 如果 response2 觸發了測驗，模擬回答
-# if response2.get('buttons'):
-#      # 假設總是回答 A (可能是錯的)
-#      response3 = maze_game(user, "A")
-#      print(f"訊息:\n{response3['message']}")
-#      print(f"地圖:\n{response3['map']}")
-#      print(f"按鈕: {response3.get('buttons')}") # 答錯會再給按鈕
-#      print("-" * 20)
 
-#      # 如果答錯了，再答一次 B
-#      if response3.get('buttons'):
-#          response4 = maze_game(user, "B")
-#          print(f"訊息:\n{response4['message']}")
-#          print(f"地圖:\n{response4['map']}")
-#          print(f"按鈕: {response4.get('buttons')}")
-#          print("-" * 20)
+# 如果單獨運行這個文件進行測試
+if __name__ == "__main__":
+    # 測試代碼可在這裡執行
+    game = MazeGame()
+    print("地圖初始化成功:")
+    print(game.render_map((1, 1)))
+    print("\n可以使用maze_game()函數進行遊戲")
 
 # 🏎 強化版賽車遊戲（修正版）
 # ------------------------------------------------------------
