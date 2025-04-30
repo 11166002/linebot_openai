@@ -2,11 +2,12 @@ from flask import Flask, request, jsonify
 from collections import deque   # 佇列（給 BFS 用）
 import random                   # 隨機數/抽題都會用到
 import requests                 # 如果之後要打外部 API
+import json                     # 用於處理 Flex Message
+from typing import Dict, List, Set, Tuple, Any, Optional  # 類型標註
 
 app = Flask(__name__)
 # ========== LINE Token ==========
 CHANNEL_ACCESS_TOKEN = "liqx01baPcbWbRF5if7oqBsZyf2+2L0eTOwvbIJ6f2Wec6is4sVd5onjl4fQAmc4n8EuqMfo7prlaG5la6kXb/y1gWOnk8ztwjjx2ZnukQbPJQeDwwcPEdFTOGOmQ1t88bQLvgQVczlzc/S9Q/6y5gdB04t89/1O/w1cDnyilFU="
-
 # ========== 📘 日語五十音資料區（kana_dict） ==========
 kana_dict = {}
 
@@ -165,159 +166,6 @@ dart_words = {
 
 dart_sessions = {}
 
-@app.route("/callback", methods=["POST"])
-def callback():
-    # 注意：這裡缺少缩進，是報錯的地方
-    body = request.get_json()
-    events = body.get("events", [])
-
-    for event in events:
-        if event["type"] == "message":
-            reply_token = event["replyToken"]
-            user_id = event["source"]["userId"]
-            text = event["message"]["text"].strip()
-
-            if text == "主選單":
-                menu = (
-                    "請選擇：\n"
-                    "1. 我要看五十音\n"
-                    "2. 我要聽音檔\n"
-                    "3. 我要玩迷宮遊戲\n"
-                    "4. 我要玩賽車遊戲\n"
-                    "5. 我要玩射飛鏢 進階篇\n"
-                    "6. 我要填問卷～\n\n"
-                    "【遊戲規則】\n"
-                    "📘 看五十音：查看所有平假名、片假名與羅馬拼音對照。\n"
-                    "🔊 聽音檔：播放50音發音音檔。\n"
-                    "🧩 迷宮遊戲：使用『上/下/左/右』移動角色，遇到假名選擇題時答對才能繼續。\n"
-                    "🏎 賽車遊戲：每次輸入『前進』會推進一格，抵達終點即勝利！\n"
-                    "🎯 射飛鏢：隨機射中一個日文單字，選出正確的羅馬拼音！"
-                )
-                reply_text(reply_token, menu)
-
-            elif text == "1" or text == "我要看五十音":
-                reply_text(reply_token, get_kana_table())
-                
-            elif text == "2" or text == "我要聽音檔":
-                # 隨機選擇一個音檔並回覆假名 + 音檔（一次回覆）
-                idx = random.randrange(len(audio_files))
-                kana, roma = audio_labels[idx]
-                reply_text_audio(
-                    reply_token,
-                    f"{kana} ({roma})",          # 文字訊息
-                    audio_files[idx],            # 音檔 URL
-                    2000                         # 長度 (毫秒)；請依實際音檔長度調整
-                )
-
-            elif text == "3" or text == "我要玩迷宮遊戲":
-                players[user_id] = {"pos": (1, 1), "quiz": None, "game": "maze", "score": 0, "items": 0}
-                # 使用按鈕版迷宮遊戲
-                maze_game_with_buttons(user_id, "初始化", reply_token)
-
-            elif text == "4" or text == "我要玩賽車遊戲":
-                players[user_id] = {"car_pos": 0, "game": "race", "quiz": None, "last_quiz": None, "last_msg": None}
-                reply_text(reply_token, render_race(0) + "\n🏁 賽車遊戲開始！請輸入「前進」來推進你的車子。")
-
-            elif text == "5" or text == "我要玩射飛鏢":
-                # --- 先隨機選單字並產生選項、記錄 session ---
-                word, (romaji, meaning) = random.choice(list(dart_words.items()))
-                options = [romaji]
-                while len(options) < 3:
-                    distractor = random.choice([v[0] for v in dart_words.values()])
-                    if distractor not in options:
-                        options.append(distractor)
-                random.shuffle(options)
-                choice_map = {"A": options[0], "B": options[1], "C": options[2]}
-                dart_sessions[user_id] = {
-                    "word": word,
-                    "meaning": meaning,
-                    "answer": romaji,
-                    "choice_map": choice_map
-                }
-                choices_text = "\n".join([f"{k}. {v}" for k, v in choice_map.items()])
-
-                # --- 一次回覆三則訊息：圖片、情境、遊戲題目 ---
-                headers = {
-                    "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
-                    "Content-Type": "application/json"
-                }
-                body = {
-                    "replyToken": reply_token,
-                    "messages": [
-                        {
-                            "type": "image",
-                            "originalContentUrl": "https://i.imgur.com/5F3fhhn.png",
-                            "previewImageUrl":  "https://i.imgur.com/5F3fhhn.png"
-                        },
-                        {
-                            "type": "text",
-                            "text": (
-                                "🎯 情境題：你來到熱鬧的日式祭典射飛鏢攤位，"
-                                "眼前的靶子上印有日語單字與其中文意義，"
-                                "請射中一個單字後，選出其正確的羅馬拼音！"
-                            )
-                        },
-                        {
-                            "type": "text",
-                            "text": (
-                                f"🎯 射飛鏢結果：你射中了「{word}（{meaning}）」！\n"
-                                f"請選出正確的羅馬拼音：\n{choices_text}"
-                            )
-                        }
-                    ]
-                }
-                requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
-
-            elif user_id in dart_sessions and text in ["A", "B", "C"]:
-                # 處理射飛鏢答案
-                session = dart_sessions[user_id]
-                if session["choice_map"][text] == session["answer"]:
-                    del dart_sessions[user_id]
-                    reply_text(reply_token, "🎯 命中！答對了！")
-                else:
-                    choices_text = "\n".join([f"{k}. {v}" for k, v in session["choice_map"].items()])
-                    reply_text(
-                        reply_token,
-                        f"❌ 沒射中，再試一次！請選出「{session['word']}（{session['meaning']}）」的正確羅馬拼音：\n{choices_text}"
-                    )
-
-            elif text == "6" or text == "我要填問卷～":
-                reply_text(reply_token, "📋 請點選以下連結填寫問卷：\nhttps://forms.gle/w5GNDJ7PY9uWTpsG6")
-
-            elif user_id in players and players[user_id].get("game") == "maze" and text in ["上", "下", "左", "右"]:
-                # 使用按鈕版迷宮遊戲
-                maze_game_with_buttons(user_id, text, reply_token)
-
-            elif user_id in players and players[user_id].get("game") == "maze" and text in ["A", "B", "C"]:
-                # 使用按鈕版迷宮遊戲處理答案
-                maze_game_with_buttons(user_id, text, reply_token)
-
-            elif user_id in players and players[user_id].get("game") == "race" and text in ["A", "B", "C", "D"]:
-                result = race_answer(user_id, text)
-                reply_text(reply_token, result)
-
-            elif user_id in players and players[user_id].get("game") == "race" and text == "前進":
-                result = race_game(user_id)
-                reply_text(reply_token, result)
-
-            else:
-                reply_text(reply_token, "📢 請輸入『主選單』")
-
-    return "OK"
-"""
-🏯 迷宮小遊戲（優化版 2025-05-01）
-------------------------------------------------------
-✅ 改進內容：
-1. 代碼結構重組：使用類別結構整理迷宮遊戲邏輯，提高可維護性
-2. 效能優化：減少不必要的全局變量訪問，優化地圖渲染
-3. 錯誤處理：增強錯誤處理能力，防止各種邊緣情況引起的崩潰
-4. 玩家體驗：改進消息提示，增加遊戲難度的漸進式調整
-5. 代碼可讀性：添加詳細註釋，優化命名約定，遵循PEP 8規範
-"""
-import random
-from collections import deque
-from typing import Dict, List, Set, Tuple, Any, Optional
-
 # ===== 1. MazeGame 類：封裝迷宮遊戲邏輯 =========================
 class MazeGame:
     """迷宮遊戲核心類，管理地圖、玩家狀態和遊戲邏輯"""
@@ -472,15 +320,12 @@ class MazeGame:
             return True
         return False
     
-    def _generate_quiz(self, player: Dict[str, Any]) -> Dict[str, str]:
+    def _generate_quiz(self, player: Dict[str, Any]) -> Dict[str, Any]:
         """生成五十音測驗題
         
         返回:
             含有測驗題、選項和地圖的字典
         """
-        # 取全局假名字典
-        from __main__ import kana_dict
-        
         # 隨機選擇一個假名及其羅馬拼音
         kana, ans = random.choice(list(kana_dict.items()))
         
@@ -504,10 +349,13 @@ class MazeGame:
         
         return {
             "map": self.render_map(player["pos"]),
-            "message": f"❓ 挑戰：「{kana}」羅馬拼音？\n{opt_txt}"
+            "message": f"❓ 挑戰：「{kana}」羅馬拼音？\n{opt_txt}",
+            "has_quiz": True,
+            "kana": kana,
+            "options": choice_map
         }
     
-    def handle_move(self, user_id: str, direction: str) -> Dict[str, str]:
+    def handle_move(self, user_id: str, direction: str) -> Dict[str, Any]:
         """處理玩家移動
         
         參數:
@@ -517,17 +365,26 @@ class MazeGame:
         返回:
             包含渲染地圖和消息的字典
         """
-        # 獲取或初始化玩家數據
-        player = self.players.setdefault(
-            user_id,
-            {
+        # 針對初始化的情況
+        if direction == "初始化":
+            # 只需返回初始地圖和提示
+            return {
+                "map": self.render_map(self.start),
+                "message": "🌟 迷宮遊戲開始！請使用按鈕移動。",
+                "has_quiz": False
+            }
+        
+        # 獲取玩家資料，如果是新玩家則初始化
+        if user_id not in self.players or not self.players[user_id]:
+            self.players[user_id] = {
                 "pos": self.start, 
                 "quiz": None, 
                 "game": "maze", 
                 "score": 0, 
                 "items": 0
             }
-        )
+        
+        player = self.players[user_id]
         
         # 標準化方向輸入
         direction = direction.strip().upper()
@@ -540,7 +397,8 @@ class MazeGame:
         if direction not in self.DIRECTIONS:
             return {
                 "map": self.render_map(player["pos"]),
-                "message": "請輸入方向（上/下/左/右）或回答題目（A/B/C）"
+                "message": "請使用方向按鈕移動",
+                "has_quiz": False
             }
         
         # 計算新位置
@@ -554,7 +412,8 @@ class MazeGame:
             new_pos in self.extra_walls):
             return {
                 "map": self.render_map(player["pos"]),
-                "message": "🚧 前方是牆，不能走喔！"
+                "message": "🚧 前方是牆，不能走喔！",
+                "has_quiz": False
             }
         
         # 更新位置
@@ -572,7 +431,9 @@ class MazeGame:
         
         # 檢查是否抵達終點
         if player["pos"] == self.goal:
-            return self._handle_goal_reached(user_id, player)
+            result = self._handle_goal_reached(user_id, player)
+            result["has_quiz"] = False
+            return result
         
         # 隨機或指定位置出題
         if (player["pos"] in self.quiz_positions or 
@@ -584,10 +445,11 @@ class MazeGame:
         info_line = "\n".join(info_messages) if info_messages else "你移動了～"
         return {
             "map": self.render_map(player["pos"]),
-            "message": f"{info_line}\n目前得分：{player.get('score', 0)} 分"
+            "message": f"{info_line}\n目前得分：{player.get('score', 0)} 分",
+            "has_quiz": False
         }
     
-    def _handle_quiz_answer(self, player: Dict[str, Any], answer: str) -> Dict[str, str]:
+    def _handle_quiz_answer(self, player: Dict[str, Any], answer: str) -> Dict[str, Any]:
         """處理玩家對測驗題的回答
         
         參數:
@@ -604,7 +466,10 @@ class MazeGame:
             opts = "\n".join(f"{k}. {v}" for k, v in choice_map.items())
             return {
                 "map": self.render_map(player["pos"]),
-                "message": f"❓ 先回答題目：「{kana}」羅馬拼音？\n{opts}"
+                "message": f"❓ 先回答題目：「{kana}」羅馬拼音？\n{opts}",
+                "has_quiz": True,
+                "kana": kana,
+                "options": choice_map
             }
         
         # 檢查答案正確性
@@ -614,13 +479,21 @@ class MazeGame:
         # 答對則清除題目狀態
         if correct:
             player["quiz"] = None
-        
-        # 返回結果
-        opts = "\n".join(f"{k}. {v}" for k, v in choice_map.items())
-        return {
-            "map": self.render_map(player["pos"]),
-            "message": feedback if correct else f"{feedback}\n{opts}"
-        }
+            return {
+                "map": self.render_map(player["pos"]),
+                "message": feedback,
+                "has_quiz": False
+            }
+        else:
+            # 回答錯誤，繼續顯示選項
+            opts = "\n".join(f"{k}. {v}" for k, v in choice_map.items())
+            return {
+                "map": self.render_map(player["pos"]),
+                "message": f"{feedback}\n{opts}",
+                "has_quiz": True,
+                "kana": kana,
+                "options": choice_map
+            }
     
     def _handle_goal_reached(self, user_id: str, player: Dict[str, Any]) -> Dict[str, str]:
         """處理玩家抵達終點
@@ -671,7 +544,7 @@ class MazeGame:
         rows = []
         for y in range(self.maze_size):
             row = []
-            for x in range(self.maze_size):
+            for x in range(maze_size):
                 cell = (y, x)
                 # 按優先順序決定顯示內容
                 if cell == player_pos:
@@ -705,50 +578,198 @@ class MazeGame:
             self.portal_positions = {(2, 5), (4, 1)}
             self.extra_walls = self._build_extra_walls()
             self._generate_quiz_positions()
+# ===== 2. LINE Flex Message 相關功能 =================================
 
-
-# ===== 2. 向外部程式提供相容的接口函數 ================================
-
-def maze_game(user_id: str, message: str) -> Dict[str, str]:
-    """迷宮遊戲入口函數，保持與原程式相容的接口
+def create_maze_flex_message(result, user_id):
+    """創建迷宮遊戲的 Flex Message
     
     參數:
-        user_id: 玩家ID
-        message: 玩家輸入的訊息
+        result: 遊戲結果字典
+        user_id: 用戶ID
         
     返回:
-        包含地圖和回應訊息的字典
+        Flex Message 字典
     """
-    # 創建或獲取遊戲實例
-    game = MazeGame()
+    # 基本容器結構
+    flex_message = {
+        "type": "flex",
+        "altText": "迷宮遊戲",
+        "contents": {
+            "type": "bubble",
+            "header": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "🏯 迷宮遊戲",
+                        "weight": "bold",
+                        "size": "xl",
+                        "color": "#7D5E3C"
+                    }
+                ],
+                "backgroundColor": "#F9E7C8"
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": result["map"],
+                        "wrap": True,
+                        "size": "md",
+                        "margin": "md",
+                        "weight": "bold"
+                    },
+                    {
+                        "type": "text",
+                        "text": result.get("message", ""),
+                        "wrap": True,
+                        "margin": "md"
+                    }
+                ],
+                "spacing": "md",
+                "backgroundColor": "#FFFFFF"
+            },
+            "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [],
+                "backgroundColor": "#F9E7C8"
+            },
+            "styles": {
+                "body": {
+                    "separator": True
+                }
+            }
+        }
+    }
     
-    # 處理玩家輸入
-    return game.handle_move(user_id, message)
-
-
-def render_map(player_pos: Tuple[int, int]) -> str:
-    """渲染地圖函數，保持與原程式相容的接口
-    
-    參數:
-        player_pos: 玩家位置
+    # 根據是否有測驗題添加不同的按鈕
+    if result.get("has_quiz", False):
+        # 測驗選項按鈕
+        options = result.get("options", {})
+        kana = result.get("kana", "")
         
-    返回:
-        渲染後的地圖字串
-    """
-    # 創建或獲取遊戲實例
-    game = MazeGame()
+        quiz_buttons = []
+        for key in ["A", "B", "C"]:
+            if key in options:
+                quiz_buttons.append({
+                    "type": "button",
+                    "action": {
+                        "type": "message",
+                        "label": f"{key}. {options[key]}",
+                        "text": key
+                    },
+                    "style": "primary",
+                    "margin": "sm",
+                    "color": "#8A7968"
+                })
+        
+        # 添加測驗選項
+        flex_message["contents"]["footer"]["contents"] = [
+            {
+                "type": "box",
+                "layout": "vertical",
+                "contents": quiz_buttons,
+                "spacing": "sm"
+            }
+        ]
+    else:
+        # 方向按鈕
+        direction_buttons = [
+            # 上方向
+            {
+                "type": "box",
+                "layout": "horizontal",
+                "contents": [
+                    {
+                        "type": "filler"
+                    },
+                    {
+                        "type": "button",
+                        "action": {
+                            "type": "message",
+                            "label": "上",
+                            "text": "上"
+                        },
+                        "style": "primary",
+                        "color": "#82B1A8"
+                    },
+                    {
+                        "type": "filler"
+                    }
+                ]
+            },
+            # 左、右方向
+            {
+                "type": "box",
+                "layout": "horizontal",
+                "contents": [
+                    {
+                        "type": "button",
+                        "action": {
+                            "type": "message",
+                            "label": "左",
+                            "text": "左"
+                        },
+                        "style": "primary",
+                        "color": "#82B1A8"
+                    },
+                    {
+                        "type": "filler"
+                    },
+                    {
+                        "type": "button",
+                        "action": {
+                            "type": "message",
+                            "label": "右",
+                            "text": "右"
+                        },
+                        "style": "primary",
+                        "color": "#82B1A8"
+                    }
+                ],
+                "margin": "md"
+            },
+            # 下方向
+            {
+                "type": "box",
+                "layout": "horizontal",
+                "contents": [
+                    {
+                        "type": "filler"
+                    },
+                    {
+                        "type": "button",
+                        "action": {
+                            "type": "message",
+                            "label": "下",
+                            "text": "下"
+                        },
+                        "style": "primary",
+                        "color": "#82B1A8"
+                    },
+                    {
+                        "type": "filler"
+                    }
+                ],
+                "margin": "md"
+            }
+        ]
+        
+        # 添加方向按鈕
+        flex_message["contents"]["footer"]["contents"] = [
+            {
+                "type": "box",
+                "layout": "vertical",
+                "contents": direction_buttons,
+                "spacing": "sm"
+            }
+        ]
     
-    # 渲染並返回地圖
-    return game.render_map(player_pos)
-
-
-# 如果單獨運行這個文件進行測試
-if __name__ == "__main__":
-    # 測試代碼可在這裡執行
-    game = MazeGame()
-    print("地圖初始化成功:")
-    print(game.render_map((1, 1)))
-    print("\n可以使用maze_game()函數進行遊戲")
+    return flex_message
 
 # 🏎 強化版賽車遊戲（修正版）
 # ------------------------------------------------------------
