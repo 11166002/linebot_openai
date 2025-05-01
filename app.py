@@ -210,11 +210,20 @@ def callback():
                     2000                         # 長度 (毫秒)；請依實際音檔長度調整
                 )
 
+            # 其他選項處理，特別是迷宮遊戲
             elif text == "3" or text == "我要玩迷宮遊戲":
                 players[user_id] = {"pos": (1, 1), "quiz": None, "game": "maze", "score": 0, "items": 0}
                 # 使用按鈕版迷宮遊戲
                 maze_game_with_buttons(user_id, "初始化", reply_token)
 
+            # 處理迷宮遊戲的移動
+            elif user_id in players and players[user_id].get("game") == "maze" and text in ["上", "下", "左", "右"]:
+                maze_game_with_buttons(user_id, text, reply_token)
+
+            # 處理迷宮遊戲的答題
+            elif user_id in players and players[user_id].get("game") == "maze" and text in ["A", "B", "C"]:
+                maze_game_with_buttons(user_id, text, reply_token)
+                
             elif text == "4" or text == "我要玩賽車遊戲":
                 players[user_id] = {"car_pos": 0, "game": "race", "quiz": None, "last_quiz": None, "last_msg": None}
                 reply_text(reply_token, render_race(0) + "\n🏁 賽車遊戲開始！請輸入「前進」來推進你的車子。")
@@ -720,16 +729,23 @@ class MazeGame:
             self._generate_quiz_positions()
 # ===== 2. LINE Flex Message 相關功能 =================================
 
-def create_maze_flex_message(result, user_id):
-    """創建迷宮遊戲的 Flex Message
+    def maze_game_with_buttons(user_id, message, reply_token):
+    """處理按鈕版迷宮遊戲
     
     參數:
-        result: 遊戲結果字典
         user_id: 用戶ID
-        
-    返回:
-        Flex Message 字典
+        message: 用戶訊息
+        reply_token: LINE回覆Token
     """
+    # 創建或獲取遊戲實例
+        game = MazeGame()
+    
+    # 處理玩家輸入
+        result = game.handle_move(user_id, message)
+    
+    # 創建並回覆 Flex Message
+        flex_message = create_maze_flex_message(result, user_id)
+        reply_flex_message(reply_token, flex_message)
     # 基本容器結構
     flex_message = {
         "type": "flex",
