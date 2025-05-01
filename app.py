@@ -166,6 +166,146 @@ dart_words = {
 
 dart_sessions = {}
 
+# 主程式入口點
+@app.route("/callback", methods=["POST"])
+def callback():
+    body = request.get_json()
+    events = body.get("events", [])
+
+    for event in events:
+        if event["type"] == "message":
+            reply_token = event["replyToken"]
+            user_id = event["source"]["userId"]
+            text = event["message"]["text"].strip()
+
+            if text == "主選單":
+                menu = (
+                    "請選擇：\n"
+                    "1. 我要看五十音\n"
+                    "2. 我要聽音檔\n"
+                    "3. 我要玩迷宮遊戲\n"
+                    "4. 我要玩賽車遊戲\n"
+                    "5. 我要玩射飛鏢 進階篇\n"
+                    "6. 我要填問卷～\n\n"
+                    "【遊戲規則】\n"
+                    "📘 看五十音：查看所有平假名、片假名與羅馬拼音對照。\n"
+                    "🔊 聽音檔：播放50音發音音檔。\n"
+                    "🧩 迷宮遊戲：使用『上/下/左/右』移動角色，遇到假名選擇題時答對才能繼續。\n"
+                    "🏎 賽車遊戲：每次輸入『前進』會推進一格，抵達終點即勝利！\n"
+                    "🎯 射飛鏢：隨機射中一個日文單字，選出正確的羅馬拼音！"
+                )
+                reply_text(reply_token, menu)
+
+            elif text == "1" or text == "我要看五十音":
+                reply_text(reply_token, get_kana_table())
+                
+            elif text == "2" or text == "我要聽音檔":
+                # 隨機選擇一個音檔並回覆假名 + 音檔（一次回覆）
+                idx = random.randrange(len(audio_files))
+                kana, roma = audio_labels[idx]
+                reply_text_audio(
+                    reply_token,
+                    f"{kana} ({roma})",          # 文字訊息
+                    audio_files[idx],            # 音檔 URL
+                    2000                         # 長度 (毫秒)；請依實際音檔長度調整
+                )
+
+            elif text == "3" or text == "我要玩迷宮遊戲":
+                players[user_id] = {"pos": (1, 1), "quiz": None, "game": "maze", "score": 0, "items": 0}
+                # 使用按鈕版迷宮遊戲
+                maze_game_with_buttons(user_id, "初始化", reply_token)
+
+            elif text == "4" or text == "我要玩賽車遊戲":
+                players[user_id] = {"car_pos": 0, "game": "race", "quiz": None, "last_quiz": None, "last_msg": None}
+                reply_text(reply_token, render_race(0) + "\n🏁 賽車遊戲開始！請輸入「前進」來推進你的車子。")
+
+            elif text == "5" or text == "我要玩射飛鏢":
+                # --- 先隨機選單字並產生選項、記錄 session ---
+                word, (romaji, meaning) = random.choice(list(dart_words.items()))
+                options = [romaji]
+                while len(options) < 3:
+                    distractor = random.choice([v[0] for v in dart_words.values()])
+                    if distractor not in options:
+                        options.append(distractor)
+                random.shuffle(options)
+                choice_map = {"A": options[0], "B": options[1], "C": options[2]}
+                dart_sessions[user_id] = {
+                    "word": word,
+                    "meaning": meaning,
+                    "answer": romaji,
+                    "choice_map": choice_map
+                }
+                choices_text = "\n".join([f"{k}. {v}" for k, v in choice_map.items()])
+
+                # --- 一次回覆三則訊息：圖片、情境、遊戲題目 ---
+                headers = {
+                    "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
+                    "Content-Type": "application/json"
+                }
+                body = {
+                    "replyToken": reply_token,
+                    "messages": [
+                        {
+                            "type": "image",
+                            "originalContentUrl": "https://i.imgur.com/5F3fhhn.png",
+                            "previewImageUrl":  "https://i.imgur.com/5F3fhhn.png"
+                        },
+                        {
+                            "type": "text",
+                            "text": (
+                                "🎯 情境題：你來到熱鬧的日式祭典射飛鏢攤位，"
+                                "眼前的靶子上印有日語單字與其中文意義，"
+                                "請射中一個單字後，選出其正確的羅馬拼音！"
+                            )
+                        },
+                        {
+                            "type": "text",
+                            "text": (
+                                f"🎯 射飛鏢結果：你射中了「{word}（{meaning}）」！\n"
+                                f"請選出正確的羅馬拼音：\n{choices_text}"
+                            )
+                        }
+                    ]
+                }
+                requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json=body)
+
+            elif user_id in dart_sessions and text in ["A", "B", "C"]:
+                # 處理射飛鏢答案
+                session = dart_sessions[user_id]
+                if session["choice_map"][text] == session["answer"]:
+                    del dart_sessions[user_id]
+                    reply_text(reply_token, "🎯 命中！答對了！")
+                else:
+                    choices_text = "\n".join([f"{k}. {v}" for k, v in session["choice_map"].items()])
+                    reply_text(
+                        reply_token,
+                        f"❌ 沒射中，再試一次！請選出「{session['word']}（{session['meaning']}）」的正確羅馬拼音：\n{choices_text}"
+                    )
+
+            elif text == "6" or text == "我要填問卷～":
+                reply_text(reply_token, "📋 請點選以下連結填寫問卷：\nhttps://forms.gle/w5GNDJ7PY9uWTpsG6")
+
+            elif user_id in players and players[user_id].get("game") == "maze" and text in ["上", "下", "左", "右"]:
+                # 使用按鈕版迷宮遊戲
+                maze_game_with_buttons(user_id, text, reply_token)
+
+            elif user_id in players and players[user_id].get("game") == "maze" and text in ["A", "B", "C"]:
+                # 使用按鈕版迷宮遊戲處理答案
+                maze_game_with_buttons(user_id, text, reply_token)
+
+            elif user_id in players and players[user_id].get("game") == "race" and text in ["A", "B", "C", "D"]:
+                result = race_answer(user_id, text)
+                reply_text(reply_token, result)
+
+            elif user_id in players and players[user_id].get("game") == "race" and text == "前進":
+                result = race_game(user_id)
+                reply_text(reply_token, result)
+
+            else:
+                reply_text(reply_token, "📢 請輸入『主選單』")
+
+    return "OK"
+
 # ===== 1. MazeGame 類：封裝迷宮遊戲邏輯 =========================
 class MazeGame:
     """迷宮遊戲核心類，管理地圖、玩家狀態和遊戲邏輯"""
