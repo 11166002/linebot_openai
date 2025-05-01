@@ -729,7 +729,8 @@ class MazeGame:
             self._generate_quiz_positions()
 # ===== 2. LINE Flex Message 相關功能 =================================
 
-    def maze_game_with_buttons(user_id, message, reply_token):
+# 假設這是第732行的函數定義
+def maze_game_with_buttons(user_id, message, reply_token):
     """處理按鈕版迷宮遊戲
     
     參數:
@@ -738,14 +739,14 @@ class MazeGame:
         reply_token: LINE回覆Token
     """
     # 創建或獲取遊戲實例
-        game = MazeGame()
+    game = MazeGame()
     
     # 處理玩家輸入
-        result = game.handle_move(user_id, message)
+    result = game.handle_move(user_id, message)
     
     # 創建並回覆 Flex Message
-        flex_message = create_maze_flex_message(result, user_id)
-        reply_flex_message(reply_token, flex_message)
+    flex_message = create_maze_flex_message(result, user_id)
+    reply_flex_message(reply_token, flex_message)
     # 基本容器結構
     flex_message = {
         "type": "flex",
