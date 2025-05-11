@@ -7,9 +7,9 @@ from linebot.exceptions import InvalidSignatureError
 from linebot.models import *
 
 # ── 🔑 必填 ───────────────────────────
-LINE_CHANNEL_ACCESS_TOKEN = "YOUR_CHANNEL_ACCESS_TOKEN"
-LINE_CHANNEL_SECRET       = "YOUR_CHANNEL_SECRET"
-LIFF_URL                  = "https://liff.line.me/YOUR_LIFF_ID"
+LINE_CHANNEL_ACCESS_TOKEN = "liqx01baPcbWbRF5if7oqBsZyf2+2L0eTOwvbIJ6f2Wec6is4sVd5onjl4fQAmc4n8EuqMfo7prlaG5la6kXb/y1gWOnk8ztwjjx2ZnukQbPJQeDwwcPEdFTOGOmQ1t88bQLvgQVczlzc/S9Q/6y5gdB04t89/1O/w1cDnyilFU="
+LINE_CHANNEL_SECRET       = "cd9fbd2ce22b12f243c5fcd2d97e5680"
+LIFF_URL                  = "https://liff.line.me/2007396139-Q0E29b2o"
 # ────────────────────────────────────
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "credentials.json"
