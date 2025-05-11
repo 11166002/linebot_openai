@@ -1,51 +1,55 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<title>Japan Learning Game ‐ 平仮名チャレンジ</title>
-<style>
- body{font-family:'YuGothic','Noto Sans JP',sans-serif;text-align:center;background:#fffdf6;padding:2em}
- .tbl{display:inline-block;background:#fffbf0;padding:1em;border-radius:8px}
- table{border-collapse:collapse;font-size:20px}
- td{border:1px solid #e0d7c8;padding:4px 6px}
- #result{white-space:pre-line;margin-top:1.5em;font-weight:bold;font-size:18px;color:#802020}
- button{padding:10px 20px;background:#ff7676;color:#fff;border:none;border-radius:6px;font-size:16px}
-</style>
+  <meta charset="UTF-8">
+  <title>LINE LIFF 畫圖工具</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { margin: 0; font-family: sans-serif; text-align: center; }
+    canvas { border: 2px solid #666; margin-top: 20px; touch-action: none; }
+    button { margin-top: 10px; padding: 10px 20px; font-size: 16px; }
+  </style>
 </head>
 <body>
-<h2>🌸 Japan Learning Game 🌸</h2>
-<p>拍照 / 選圖，上傳手寫平假名讓 AI 猜！</p>
-<input type="file" id="imageInput" accept="image/*"><br><br>
-<button onclick="uploadImage()">📤 上傳圖片</button>
-<div id="result"></div>
+  <h1>🎨 在 LINE 畫圖</h1>
+  <canvas id="canvas" width="320" height="320"></canvas>
+  <br>
+  <button onclick="clearCanvas()">清除畫布</button>
 
-<hr style="margin:2em auto;width:80%;border:0;border-top:1px dashed #ddc">
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script>
+    // 第一步：初始化 LIFF
+    liff.init({ liffId: "YOUR_LIFF_ID" })  // ← 這裡改成你自己的 LIFF ID
+      .then(() => console.log("✅ LIFF 初始化成功"))
+      .catch(err => console.error("❌ 初始化失敗", err));
 
-<div class="tbl">
-<table>
-<tr><td>あ</td><td>い</td><td>う</td><td>え</td><td>お</td></tr>
-<tr><td>か</td><td>き</td><td>く</td><td>け</td><td>こ</td></tr>
-<tr><td>さ</td><td>し</td><td>す</td><td>せ</td><td>そ</td></tr>
-<tr><td>た</td><td>ち</td><td>つ</td><td>て</td><td>と</td></tr>
-<tr><td>な</td><td>に</td><td>ぬ</td><td>ね</td><td>の</td></tr>
-<tr><td>は</td><td>ひ</td><td>ふ</td><td>へ</td><td>ほ</td></tr>
-<tr><td>ま</td><td>み</td><td>む</td><td>め</td><td>も</td></tr>
-<tr><td>や</td><td></td><td>ゆ</td><td></td><td>よ</td></tr>
-<tr><td>ら</td><td>り</td><td>る</td><td>れ</td><td>ろ</td></tr>
-<tr><td>わ</td><td></td><td>を</td><td></td><td>ん</td></tr>
-</table>
-</div>
+    // 第二步：畫圖邏輯
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let drawing = false;
 
-<script>
-async function uploadImage(){
-  const file=document.getElementById('imageInput').files[0];
-  if(!file){alert("請先選擇圖片！");return;}
-  const fd=new FormData();fd.append("image",file);
-  document.getElementById('result').textContent="⏳ AI 辨識中…";
-  const res=await fetch("/upload",{method:"POST",body:fd});
-  const data=await res.json();
-  document.getElementById('result').textContent=data.recognized_text+"\\n"+data.note;
-}
-</script>
+    canvas.addEventListener('mousedown', () => drawing = true);
+    canvas.addEventListener('mouseup', () => {
+      drawing = false;
+      ctx.beginPath();
+    });
+    canvas.addEventListener('mousemove', draw);
+
+    function draw(e) {
+      if (!drawing) return;
+      const rect = canvas.getBoundingClientRect();
+      ctx.lineWidth = 3;
+      ctx.lineCap = "round";
+      ctx.strokeStyle = "#000";
+      ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+    }
+
+    function clearCanvas() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  </script>
 </body>
 </html>
