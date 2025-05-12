@@ -1,31 +1,31 @@
 from flask import Flask, request, jsonify, render_template, abort
-import os, io
-from google.cloud import vision
+import os, io, base64, cv2                         # ⚡️ 新增 base64 、cv2
+from skimage.metrics import structural_similarity as ssim  # ⚡️ 新增 SSIM
 
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import *
 
 # ── 🔑 必填 ───────────────────────────
-LINE_CHANNEL_ACCESS_TOKEN = "liqx01baPcbWbRF5if7oqBsZyf2+2L0eTOwvbIJ6f2Wec6is4sVd5onjl4fQAmc4n8EuqMfo7prlaG5la6kXb/y1gWOnk8ztwjjx2ZnukQbPJQeDwwcPEdFTOGOmQ1t88bQLvgQVczlzc/S9Q/6y5gdB04t89/1O/w1cDnyilFU="
-LINE_CHANNEL_SECRET       = "cd9fbd2ce22b12f243c5fcd2d97e5680"
-LIFF_URL                  = "https://liff.line.me/2007396139-Q0E29b2o"
+LINE_CHANNEL_ACCESS_TOKEN = "你的 TOKEN"
+LINE_CHANNEL_SECRET       = "你的 SECRET"
+LIFF_URL                  = "https://liff.line.me/xxxxxxxx"
 # ────────────────────────────────────
-
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "credentials.json"
 
 app = Flask(__name__)
 UPLOAD_FOLDER = "static"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# ── Google Vision OCR ─────────────────
-def detect_kana(img_path: str) -> str:
-    client = vision.ImageAnnotatorClient()
-    with io.open(img_path, "rb") as f:
-        content = f.read()
-    image = vision.Image(content=content)
-    res   = client.text_detection(image=image)
-    return res.text_annotations[0].description.strip() if res.text_annotations else "👀 沒找到假名，再寫一次吧！"
+# ── 圖像相似度比對（SSIM）──────────────
+def compare_images(user_img_path: str, correct_img_path: str) -> float:
+    img1 = cv2.imread(user_img_path, cv2.IMREAD_GRAYSCALE)
+    img2 = cv2.imread(correct_img_path, cv2.IMREAD_GRAYSCALE)
+    if img1 is None or img2 is None:
+        raise FileNotFoundError("❌ 找不到範例圖！")
+    img1 = cv2.resize(img1, (200, 200))
+    img2 = cv2.resize(img2, (200, 200))
+    score, _ = ssim(img1, img2, full=True)
+    return score
 # ────────────────────────────────────
 
 # ── LINE Bot init ───────────────────
@@ -38,26 +38,40 @@ handler      = WebhookHandler(LINE_CHANNEL_SECRET)
 def home():
     return render_template("index.html")
 
-@app.route("/upload", methods=["POST"])
-def upload():
-    if "image" not in request.files:
-        return jsonify({"error": "請先選擇圖片！"}), 400
-    f = request.files["image"]
-    save_to = os.path.join(UPLOAD_FOLDER, "input.png")
-    f.save(save_to)
-    txt = detect_kana(save_to)
-    return jsonify(
-        {
-            "recognized_text": f"🎌【Japan Learning Game】判定你寫的是：「{txt}」！🌟",
-            "note": "📣 如果不是你想寫的，再試一次也沒關係，加油！",
-        }
-    )
+# Canvas base64 → SSIM 比對
+@app.route("/check", methods=["POST"])
+def check_image():
+    data = request.json or {}
+    image_data = data.get("image")
+    answer     = data.get("answer")
+
+    if not image_data or not answer:
+        return jsonify({"correct": False, "error": "缺少 image 或 answer"}), 400
+
+    # 儲存使用者圖片
+    header, encoded = image_data.split(",", 1)
+    img_bytes = base64.b64decode(encoded)
+    user_img_path = os.path.join(UPLOAD_FOLDER, "user_input.png")
+    with open(user_img_path, "wb") as f:
+        f.write(img_bytes)
+
+    correct_img_path = f"samples/{answer}.png"
+    try:
+        score = compare_images(user_img_path, correct_img_path)
+        print(f"[SSIM] {answer} 分數：{score:.3f}")
+        return jsonify({
+            "correct": score > 0.6,
+            "score"  : round(score, 3),
+            "message": "✅ 答對！太棒了！" if score > 0.6 else "❌ 再試一次，加油！"
+        })
+    except Exception as e:
+        return jsonify({"correct": False, "error": str(e)}), 500
 # ────────────────────────────────────
 
 # ── LINE Webhook ─────────────────────
 @app.route("/callback", methods=["POST"])
 def callback():
-    signature = request.headers["X-Line-Signature"]
+    signature = request.headers.get("X-Line-Signature", "")
     body      = request.get_data(as_text=True)
     try:
         handler.handle(body, signature)
@@ -100,7 +114,9 @@ def handle_msg(event):
             FlexSendMessage(alt_text="平假名 50 音", contents=kana_flex())
         )
     elif text == "幫助":
-        line_bot_api.reply_message(event.reply_token, TextSendMessage("輸入「我要練習」→ 點打開畫板 → 上傳手寫假名圖片。"))
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(
+            "步驟：\n1️⃣ 輸入「我要練習」\n2️⃣ 點『打開畫板』畫出題目\n3️⃣ 按送出，系統用 SSIM 判斷對錯 🎯"
+        ))
     else:
         line_bot_api.reply_message(event.reply_token, TextSendMessage("輸入「我要練習」來開始唷 ✍️"))
 
