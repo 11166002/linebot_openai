@@ -63,36 +63,35 @@ KANA_CATEGORIES = {
 }
 
 
-def build_kana_flex_carousel(category: str) -> dict:
+def build_kana_flex(category: str) -> dict:
+    """Return a Flex bubble showing kana + romaji (1 行 1 個)."""
     pairs = KANA_CATEGORIES.get(category, [])
-    bubbles = []
-    for i in range(0, len(pairs), 5):
-        chunk = pairs[i:i + 5]
-        contents = [
-            {"type": "text", "text": f"{category} 假名（第 {i//5 + 1} 頁）", "weight": "bold", "size": "lg", "align": "center"}
-        ]
-        for kana, romaji in chunk:
-            contents.append({
-                "type": "text",
-                "text": f"『{kana}』 → {romaji}",
-                "wrap": True,
-                "size": "md",
-                "margin": "sm"
-            })
-        bubble = {
-            "type": "bubble",
-            "body": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": contents,
-            },
-        }
-        bubbles.append(bubble)
-    return {"type": "carousel", "contents": bubbles}
+    contents = [
+        {"type": "text", "text": f"{category} 50 音：每組對應如下👇", "weight": "bold", "size": "lg", "align": "center"}
+    ]
+    for kana, romaji in pairs:
+        contents.append({
+            "type": "text",
+            "text": f"日文 50 音的假名是『{kana}』，羅馬拼音寫作 {romaji}。",
+            "wrap": True,
+            "size": "md",
+            "margin": "sm"
+        })
+
+    return {
+        "type": "bubble",
+        "body": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": contents,
+        },
+    }
+
 
 def kana_category_quick_reply() -> QuickReply:
     items = [QuickReplyButton(action=MessageAction(label=cat, text=cat)) for cat in KANA_CATEGORIES]
     return QuickReply(items=items)
+
 # ── Web UI ─────────────────────────
 @app.route("/")
 def home():
@@ -137,79 +136,3 @@ def callback():
         abort(400)
     return "OK"
 
-
-@handler.add(MessageEvent, message=TextMessage)
-def handle_msg(event):
-    text = event.message.text.strip()
-
-    # 主選單
-    if text == "我要練習":
-        qr = QuickReply(items=[
-            QuickReplyButton(action=URIAction(label="打開畫板", uri=LIFF_URL)),
-            QuickReplyButton(action=MessageAction(label="平假名表", text="平假名表")),
-            QuickReplyButton(action=MessageAction(label="幫助", text="幫助")),
-        ])
-        line_bot_api.reply_message(event.reply_token, TextSendMessage("選擇功能👇", quick_reply=qr))
-        return
-
-    # 二階：平假名表 → 選分類
-    if text == "平假名表":
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage("請選擇：清音 / 濁音 / 半濁音", quick_reply=kana_category_quick_reply()),
-        )
-        return
-
-    # 三階：顯示指定分類
-    if text in KANA_CATEGORIES:
-        bubble = build_kana_flex(text)
-        line_bot_api.reply_message(
-            event.reply_token,
-            FlexSendMessage(alt_text=f"{text} 假名表", contents=bubble),
-        )
-        return
-
-    # 幫助
-    if text == "幫助":
-        help_msg = (
-            "步驟：\n"
-            "1️⃣ 輸入『我要練習』\n"
-            "2️⃣ 點『打開畫板』開始寫字答題\n"
-            "3️⃣ 如要查 50 音 → 選『平假名表』再選分類即可查看🎯"
-        )
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(help_msg))
-        return
-
-    # 其他輸入
-    line_bot_api.reply_message(event.reply_token, TextSendMessage("輸入『我要練習』或『平假名表』來開始唷 ✍️"))
-
-
-# ── 啟動伺服器 ─────────────────────
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
-
-我可以做滑頁的嗎# ── Kana 資料（1 行 1 個：假名 + 羅馬音）─────
-KANA_CATEGORIES = {
-    "清音": [
-        ("あ", "a"), ("い", "i"), ("う", "u"), ("え", "e"), ("お", "o"),
-        ("か", "ka"), ("き", "ki"), ("く", "ku"), ("け", "ke"), ("こ", "ko"),
-        ("さ", "sa"), ("し", "shi"), ("す", "su"), ("せ", "se"), ("そ", "so"),
-        ("た", "ta"), ("ち", "chi"), ("つ", "tsu"), ("て", "te"), ("と", "to"),
-        ("な", "na"), ("に", "ni"), ("ぬ", "nu"), ("ね", "ne"), ("の", "no"),
-        ("は", "ha"), ("ひ", "hi"), ("ふ", "fu"), ("へ", "he"), ("ほ", "ho"),
-        ("ま", "ma"), ("み", "mi"), ("む", "mu"), ("め", "me"), ("も", "mo"),
-        ("や", "ya"), ("ゆ", "yu"), ("よ", "yo"),
-        ("ら", "ra"), ("り", "ri"), ("る", "ru"), ("れ", "re"), ("ろ", "ro"),
-        ("わ", "wa"), ("を", "wo"), ("ん", "n"),
-    ],
-    "濁音": [
-        ("が", "ga"), ("ぎ", "gi"), ("ぐ", "gu"), ("げ", "ge"), ("ご", "go"),
-        ("ざ", "za"), ("じ", "ji"), ("ず", "zu"), ("ぜ", "ze"), ("ぞ", "zo"),
-        ("だ", "da"), ("ぢ", "ji"), ("づ", "zu"), ("で", "de"), ("ど", "do"),
-        ("ば", "ba"), ("び", "bi"), ("ぶ", "bu"), ("べ", "be"), ("ぼ", "bo"),
-    ],
-    "半濁音": [
-        ("ぱ", "pa"), ("ぴ", "pi"), ("ぷ", "pu"), ("ぺ", "pe"), ("ぽ", "po"),
-    ],
-}
