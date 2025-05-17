@@ -64,27 +64,36 @@ KANA_CATEGORIES = {
 
 
 def build_kana_flex(category: str) -> dict:
-    """Return a Flex bubble showing kana + romaji (1 行 1 個)."""
     pairs = KANA_CATEGORIES.get(category, [])
-    contents = [
-        {"type": "text", "text": f"{category} 50 音：每組對應如下👇", "weight": "bold", "size": "lg", "align": "center"}
-    ]
-    for kana, romaji in pairs:
-        contents.append({
-            "type": "text",
-            "text": f"日文 50 音的假名是『{kana}』，羅馬拼音寫作 {romaji}。",
-            "wrap": True,
-            "size": "md",
-            "margin": "sm"
+    pages = [pairs[i:i + 10] for i in range(0, len(pairs), 10)]
+    bubbles = []
+
+    for page in pages:
+        contents = []
+        for kana, romaji in page:
+            contents.append({
+                "type": "button",
+                "action": {
+                    "type": "message",
+                    "label": f"{kana} | {romaji}",
+                    "text": kana
+                },
+                "style": "primary",
+                "margin": "sm"
+            })
+        bubbles.append({
+            "type": "bubble",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": contents
+            }
         })
 
     return {
-        "type": "bubble",
-        "body": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": contents,
-        },
+        "type": "carousel",
+        "contents": bubbles
+    },
     }
 
 
@@ -139,6 +148,27 @@ def callback():
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_msg(event):
+    KANA_INFO = {
+        "あ": ("a", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7).m4a", "這個音是母音之一，例如：あさ（早上）"),
+        "い": ("i", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)1.m4a", "這是日語的第二個母音，例如：いぬ（狗）"),
+        "う": ("u", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)2.m4a", "第三個母音，例如：うみ（海）"),
+        "え": ("e", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)3.m4a", "第四個母音，例如：えき（車站）"),
+        "お": ("o", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)4.m4a", "第五個母音，例如：おちゃ（茶）"),
+        "か": ("ka", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)5.m4a", "這是清音之一，例如：かさ（雨傘）")
+    }
+
+    text = event.message.text.strip()
+
+    if text in KANA_INFO:
+        romaji, audio_url, description = KANA_INFO[text]
+        messages = [
+            TextSendMessage(text=f"日語：{text}
+羅馬拼音：{romaji}
+說明：{description}"),
+            AudioSendMessage(original_content_url=audio_url, duration=2000)
+        ]
+        line_bot_api.reply_message(event.reply_token, messages)
+        return
     text = event.message.text.strip()
 
     # 主選單
