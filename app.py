@@ -37,153 +37,100 @@ def compare_images(user_img_path: str, correct_img_path: str) -> float:
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
-# ── Kana 資料（1 行 1 個：假名 + 羅馬音）─────
-KANA_CATEGORIES = {
-    "清音": [
-        ("あ", "a"), ("い", "i"), ("う", "u"), ("え", "e"), ("お", "o"),
-        ("か", "ka"), ("き", "ki"), ("く", "ku"), ("け", "ke"), ("こ", "ko"),
-        ("さ", "sa"), ("し", "shi"), ("す", "su"), ("せ", "se"), ("そ", "so"),
-        ("た", "ta"), ("ち", "chi"), ("つ", "tsu"), ("て", "te"), ("と", "to"),
-        ("な", "na"), ("に", "ni"), ("ぬ", "nu"), ("ね", "ne"), ("の", "no"),
-        ("は", "ha"), ("ひ", "hi"), ("ふ", "fu"), ("へ", "he"), ("ほ", "ho"),
-        ("ま", "ma"), ("み", "mi"), ("む", "mu"), ("め", "me"), ("も", "mo"),
-        ("や", "ya"), ("ゆ", "yu"), ("よ", "yo"),
-        ("ら", "ra"), ("り", "ri"), ("る", "ru"), ("れ", "re"), ("ろ", "ro"),
-        ("わ", "wa"), ("を", "wo"), ("ん", "n"),
-    ],
-    "濁音": [
-        ("が", "ga"), ("ぎ", "gi"), ("ぐ", "gu"), ("げ", "ge"), ("ご", "go"),
-        ("ざ", "za"), ("じ", "ji"), ("ず", "zu"), ("ぜ", "ze"), ("ぞ", "zo"),
-        ("だ", "da"), ("ぢ", "ji"), ("づ", "zu"), ("で", "de"), ("ど", "do"),
-        ("ば", "ba"), ("び", "bi"), ("ぶ", "bu"), ("べ", "be"), ("ぼ", "bo"),
-    ],
-    "半濁音": [
-        ("ぱ", "pa"), ("ぴ", "pi"), ("ぷ", "pu"), ("ぺ", "pe"), ("ぽ", "po"),
-    ],
+# ── 假名拼音與說明 ──────────────────
+KANA_INFO = {
+    "あ": ("a", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7).m4a", "這個音是母音之一，例如：あさ（早上）"),
+    "い": ("i", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)1.m4a", "第二個母音，例句：いぬ（狗）"),
+    "う": ("u", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)2.m4a", "第三個母音，例句：うみ（海）"),
+    "え": ("e", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)3.m4a", "第四個母音，例句：えき（車站）"),
+    "お": ("o", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)4.m4a", "第五個母音，例句：おちゃ（茶）"),
+    "か": ("ka", "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)5.m4a", "清音か，例句：かさ（傘）")
+    # 其餘假名可持續擴充
 }
 
+# ── Kana 類別資料（假名+拼音）──────
+KANA_CATEGORIES = {
+    "清音": [(k, v[0]) for k, v in KANA_INFO.items() if k in "あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん"],
+    "濁音": [("が", "ga"), ("ぎ", "gi"), ("ぐ", "gu"), ("げ", "ge"), ("ご", "go")],
+    "半濁音": [("ぱ", "pa"), ("ぴ", "pi"), ("ぷ", "pu"), ("ぺ", "pe"), ("ぽ", "po")]
+}
+
+# ── Flex Bubble ─────────────────────
 
 def build_kana_flex(category: str) -> dict:
-    """Return a Flex bubble showing kana + romaji (1 行 1 個)."""
     pairs = KANA_CATEGORIES.get(category, [])
-    contents = [
-        {"type": "text", "text": f"{category} 50 音：每組對應如下👇", "weight": "bold", "size": "lg", "align": "center"}
-    ]
+    contents = [{"type": "text", "text": f"{category} 假名一覽 (點擊播放)", "weight": "bold", "align": "center"}]
     for kana, romaji in pairs:
         contents.append({
-            "type": "text",
-            "text": f"日文 50 音的假名是『{kana}』，羅馬拼音寫作 {romaji}。",
-            "wrap": True,
-            "size": "md",
+            "type": "button",
+            "action": {"type": "message", "label": f"{kana} | {romaji}", "text": kana},
+            "style": "primary",
             "margin": "sm"
         })
+    return {"type": "bubble", "body": {"type": "box", "layout": "vertical", "contents": contents}}
 
-    return {
-        "type": "bubble",
-        "body": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": contents,
-        },
-    }
-
+# ── Quick Reply ─────────────────────
 
 def kana_category_quick_reply() -> QuickReply:
-    items = [QuickReplyButton(action=MessageAction(label=cat, text=cat)) for cat in KANA_CATEGORIES]
-    return QuickReply(items=items)
+    return QuickReply(items=[QuickReplyButton(action=MessageAction(label=cat, text=cat)) for cat in KANA_CATEGORIES])
 
-# ── Web UI ─────────────────────────
+# ── Web Routes ─────────────────────
 @app.route("/")
 def home():
     return render_template("index.html")
 
-
 @app.route("/check", methods=["POST"])
 def check_image():
     data = request.json or {}
-    image_data = data.get("image")
-    answer = data.get("answer")
+    image_data = data.get("image"); answer = data.get("answer")
     if not image_data or not answer:
         return jsonify({"correct": False, "error": "缺少 image 或 answer"}), 400
-
     header, encoded = image_data.split(",", 1)
-    user_img_path = os.path.join(UPLOAD_FOLDER, "user_input.png")
+    user_img_path = os.path.join(UPLOAD_FOLDER, "user.png")
     with open(user_img_path, "wb") as f:
         f.write(base64.b64decode(encoded))
-
     correct_img_path = os.path.join(SAMPLE_FOLDER, f"{answer}.png")
     if not os.path.exists(correct_img_path):
-        return jsonify({"correct": False, "error": f"找不到範例 {answer}.png"}), 404
-
-    try:
-        score = compare_images(user_img_path, correct_img_path)
-        return jsonify({
-            "correct": score > 0.6,
-            "score": round(score, 3),
-            "message": "✅ 答對！太棒了！" if score > 0.6 else "❌ 再試一次，加油！",
-        })
-    except Exception as e:
-        return jsonify({"correct": False, "error": str(e)}), 500
+        return jsonify({"correct": False, "error": "找不到範例"}), 404
+    score = compare_images(user_img_path, correct_img_path)
+    return jsonify({"correct": score > 0.6, "score": round(score, 3)})
 
 # ── LINE Webhook ───────────────────
 @app.route("/callback", methods=["POST"])
 def callback():
-    signature = request.headers.get("X-Line-Signature", "")
-    body = request.get_data(as_text=True)
+    signature = request.headers.get("X-Line-Signature", ""); body = request.get_data(as_text=True)
     try:
         handler.handle(body, signature)
     except InvalidSignatureError:
         abort(400)
     return "OK"
 
-
 @handler.add(MessageEvent, message=TextMessage)
 def handle_msg(event):
-    text = event.message.text.strip()
-
+    txt = event.message.text.strip()
+    # 假名介紹
+    if txt in KANA_INFO:
+        romaji, audio_url, desc = KANA_INFO[txt]
+        msgs = [TextSendMessage(text=f"日語：{txt}\n羅馬拼音：{romaji}\n說明：{desc}"),
+                AudioSendMessage(original_content_url=audio_url, duration=2000)]
+        line_bot_api.reply_message(event.reply_token, msgs); return
     # 主選單
-    if text == "我要練習":
+    if txt == "我要練習":
         qr = QuickReply(items=[
             QuickReplyButton(action=URIAction(label="打開畫板", uri=LIFF_URL)),
             QuickReplyButton(action=MessageAction(label="平假名表", text="平假名表")),
-            QuickReplyButton(action=MessageAction(label="幫助", text="幫助")),
-        ])
-        line_bot_api.reply_message(event.reply_token, TextSendMessage("選擇功能👇", quick_reply=qr))
-        return
+            QuickReplyButton(action=MessageAction(label="幫助", text="幫助"))])
+        line_bot_api.reply_message(event.reply_token, TextSendMessage("選擇功能👇", quick_reply=qr)); return
+    # 類別選擇
+    if txt == "平假名表":
+        line_bot_api.reply_message(event.reply_token, TextSendMessage("請選擇類別：", quick_reply=kana_category_quick_reply())); return
+    if txt in KANA_CATEGORIES:
+        bubble = build_kana_flex(txt)
+        line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text=f"{txt}表", contents=bubble)); return
+    if txt == "幫助":
+        line_bot_api.reply_message(event.reply_token, TextSendMessage("輸入『我要練習』開始✍️")); return
+    line_bot_api.reply_message(event.reply_token, TextSendMessage("輸入『我要練習』或點假名！"))
 
-    # 二階：平假名表 → 選分類
-    if text == "平假名表":
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage("請選擇：清音 / 濁音 / 半濁音", quick_reply=kana_category_quick_reply()),
-        )
-        return
-
-    # 三階：顯示指定分類
-    if text in KANA_CATEGORIES:
-        bubble = build_kana_flex(text)
-        line_bot_api.reply_message(
-            event.reply_token,
-            FlexSendMessage(alt_text=f"{text} 假名表", contents=bubble),
-        )
-        return
-
-    # 幫助
-    if text == "幫助":
-        help_msg = (
-            "步驟：\n"
-            "1️⃣ 輸入『我要練習』\n"
-            "2️⃣ 點『打開畫板』開始寫字答題\n"
-            "3️⃣ 如要查 50 音 → 選『平假名表』再選分類即可查看🎯"
-        )
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(help_msg))
-        return
-
-    # 其他輸入
-    line_bot_api.reply_message(event.reply_token, TextSendMessage("輸入『我要練習』或『平假名表』來開始唷 ✍️"))
-
-
-# ── 啟動伺服器 ─────────────────────
+# ── Run ───────────────────────────
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    port = int(os.environ.get("PORT", 10000)); app.run(host="0.0.0.0", port=port)
