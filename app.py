@@ -27,6 +27,7 @@ os.makedirs(SAMPLE_FOLDER, exist_ok=True)
 
 # ── 圖像相似度（SSIM）──────────────
 def compare_images(user_img_path: str, correct_img_path: str) -> float:
+    """讀取兩張圖片並以 SSIM 計算相似度，0~1 越高越像"""
     img1 = cv2.imread(user_img_path, cv2.IMREAD_GRAYSCALE)
     img2 = cv2.imread(correct_img_path, cv2.IMREAD_GRAYSCALE)
     if img1 is None or img2 is None:
@@ -44,11 +45,12 @@ handler      = WebhookHandler(LINE_CHANNEL_SECRET)
 # ── Web UI ─────────────────────────
 @app.route("/")
 def home():
-    # templates/index.html 必須存在
+    """顯示前端畫板 (templates/index.html)"""
     return render_template("index.html")
 
 @app.route("/check", methods=["POST"])
 def check_image():
+    """前端上傳 base64 圖片 + 正確答案，回傳比對結果"""
     data = request.json or {}
     image_data = data.get("image")
     answer     = data.get("answer")
@@ -77,24 +79,27 @@ def check_image():
         return jsonify({"correct": False, "error": str(e)}), 500
 # ──────────────────────────────────
 
-# ── LINE Webhook ───────────────────
-@app.route("/callback", methods=["POST"])
-def callback():
-    signature = request.headers.get("X-Line-Signature", "")
-    body      = request.get_data(as_text=True)
-    try:
-        # 若你暫時不需要處理事件，可註解下一行
-        handler.handle(body, signature)
-    except InvalidSignatureError:
-        abort(400)
-    return "OK"
+# ── Kana Flex / Quick Reply 工具函式 ──────────────────
 
-def kana_flex():
-    rows = [
-        "あ い う え お", "か き く け こ", "さ し す せ そ",
-        "た ち つ て と", "な に ぬ ね の", "は ひ ふ へ ほ",
-        "ま み む め も", "や   ゆ   よ", "ら り る れ ろ", "わ   を   ん",
-    ]
+def kana_flex(category: str = "清音") -> dict:
+    """依分類回傳平假名 Flex Carousel"""
+    if category == "清音":
+        rows = [
+            "あ い う え お", "か き く け こ", "さ し す せ そ",
+            "た ち つ て と", "な に ぬ ね の", "は ひ ふ へ ほ",
+            "ま み む め も", "や   ゆ   よ", "ら り る れ ろ", "わ   を   ん",
+        ]
+    elif category == "濁音":
+        rows = [
+            "が ぎ ぐ げ ご", "ざ じ ず ぜ ぞ", "だ ぢ づ で ど", "ば び ぶ べ ぼ",
+        ]
+    elif category == "半濁音":
+        rows = [
+            "ぱ ぴ ぷ ぺ ぽ",
+        ]
+    else:
+        rows = []
+
     bubbles = [
         {
             "type": "bubble",
@@ -108,9 +113,22 @@ def kana_flex():
     ]
     return {"type": "carousel", "contents": bubbles}
 
+
+def kana_category_quick_reply() -> QuickReply:
+    """回傳『清音／濁音／半濁音』快速選單"""
+    return QuickReply(items=[
+        QuickReplyButton(action=MessageAction(label="清音", text="清音")),
+        QuickReplyButton(action=MessageAction(label="濁音", text="濁音")),
+        QuickReplyButton(action=MessageAction(label="半濁音", text="半濁音")),
+    ])
+# ─────────────────────────────────────────────
+
+# ── LINE MessageEvent 處理 ──────────────────
 @handler.add(MessageEvent, message=TextMessage)
 def handle_msg(event):
     text = event.message.text.strip()
+
+    # 0️⃣ 進入主功能選單
     if text == "我要練習":
         qr = QuickReply(items=[
             QuickReplyButton(action=URIAction(label="打開畫板", uri=LIFF_URL)),
@@ -118,17 +136,45 @@ def handle_msg(event):
             QuickReplyButton(action=MessageAction(label="幫助",      text="幫助")),
         ])
         line_bot_api.reply_message(event.reply_token, TextSendMessage("選擇功能👇", quick_reply=qr))
+
+    # 1️⃣ 平假名表 → 顯示分類選單
     elif text == "平假名表":
         line_bot_api.reply_message(
             event.reply_token,
-            FlexSendMessage(alt_text="平假名 50 音", contents=kana_flex())
+            TextSendMessage("請選擇：清音 / 濁音 / 半濁音", quick_reply=kana_category_quick_reply()),
         )
+
+    # 2️⃣ 顯示對應分類的假名 Flex
+    elif text in ("清音", "濁音", "半濁音"):
+        line_bot_api.reply_message(
+            event.reply_token,
+            FlexSendMessage(alt_text=f"平假名（{text}）", contents=kana_flex(text))
+        )
+
+    # 3️⃣ 幫助
     elif text == "幫助":
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(
-            "步驟：\n1️⃣ 輸入「我要練習」\n2️⃣ 點『打開畫板』作答\n3️⃣ 系統用 SSIM 判斷對錯 🎯"
-        ))
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(
+                "步驟：\n1️⃣ 輸入「我要練習」\n2️⃣ 點『打開畫板』作答\n3️⃣ 系統用 SSIM 判斷對錯 🎯"
+            )
+        )
+
+    # 4️⃣ 其他輸入
     else:
         line_bot_api.reply_message(event.reply_token, TextSendMessage("輸入「我要練習」來開始唷 ✍️"))
+# ──────────────────────────────────
+
+# ── LINE Webhook 入口 ───────────────────
+@app.route("/callback", methods=["POST"])
+def callback():
+    signature = request.headers.get("X-Line-Signature", "")
+    body      = request.get_data(as_text=True)
+    try:
+        handler.handle(body, signature)  # 你可以先註解此行來暫停處理事件
+    except InvalidSignatureError:
+        abort(400)
+    return "OK"
 # ──────────────────────────────────
 
 if __name__ == "__main__":
