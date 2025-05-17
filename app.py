@@ -69,7 +69,8 @@ def build_kana_flex(category: str) -> dict:
     bubbles = []
 
     for page in pages:
-        contents = []
+        contents = [
+            {"type": "text", "text": f"{category}：請點選任一假名👇", "weight": "bold", "align": "center"}]
         for kana, romaji in page:
             contents.append({
                 "type": "button",
@@ -93,7 +94,7 @@ def build_kana_flex(category: str) -> dict:
     return {
         "type": "carousel",
         "contents": bubbles
-    },
+    }
     }
 
 
