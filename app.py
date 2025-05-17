@@ -79,40 +79,34 @@ def check_image():
         return jsonify({"correct": False, "error": str(e)}), 500
 # ──────────────────────────────────
 
-# ── Kana Flex / Quick Reply 工具函式 ──────────────────
+# ── 假名資料 ─────────────────────────
+kana_groups = {
+    "清音": [
+        ("あ行", "あ い う え お"),
+        ("か行", "か き く け こ"),
+        ("さ行", "さ し す せ そ"),
+        ("た行", "た ち つ て と"),
+        ("な行", "な に ぬ ね の"),
+        ("は行", "は ひ ふ へ ほ"),
+        ("ま行", "ま み む め も"),
+        ("ら行", "ら り る れ ろ"),
+    ],
+    "濁音": [
+        ("が行", "が ぎ ぐ げ ご"),
+        ("ざ行", "ざ じ ず ぜ ぞ"),
+        ("だ行", "だ ぢ づ で ど"),
+        ("ば行", "ば び ぶ べ ぼ"),
+    ],
+    "半濁音": [
+        ("ぱ行", "ぱ ぴ ぷ ぺ ぽ"),
+    ],
+}
 
-def kana_flex(category: str = "清音") -> dict:
-    """依分類回傳平假名 Flex Carousel"""
-    if category == "清音":
-        rows = [
-            "あ い う え お", "か き く け こ", "さ し す せ そ",
-            "た ち つ て と", "な に ぬ ね の", "は ひ ふ へ ほ",
-            "ま み む め も", "や   ゆ   よ", "ら り る れ ろ", "わ   を   ん",
-        ]
-    elif category == "濁音":
-        rows = [
-            "が ぎ ぐ げ ご", "ざ じ ず ぜ ぞ", "だ ぢ づ で ど", "ば び ぶ べ ぼ",
-        ]
-    elif category == "半濁音":
-        rows = [
-            "ぱ ぴ ぷ ぺ ぽ",
-        ]
-    else:
-        rows = []
+# label → row 快速查表
+label_to_row = {label: row for cat in kana_groups.values() for (label, row) in cat}
+# ──────────────────────────────────
 
-    bubbles = [
-        {
-            "type": "bubble",
-            "body": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [{"type": "text", "text": r, "size": "xl", "align": "center"}],
-            },
-        }
-        for r in rows
-    ]
-    return {"type": "carousel", "contents": bubbles}
-
+# ── Quick Reply 工具函式 ──────────────────
 
 def kana_category_quick_reply() -> QuickReply:
     """回傳『清音／濁音／半濁音』快速選單"""
@@ -121,7 +115,29 @@ def kana_category_quick_reply() -> QuickReply:
         QuickReplyButton(action=MessageAction(label="濁音", text="濁音")),
         QuickReplyButton(action=MessageAction(label="半濁音", text="半濁音")),
     ])
-# ─────────────────────────────────────────────
+
+
+def kana_group_quick_reply(category: str) -> QuickReply:
+    """依所選分類建立『5 個一組』的行快速選單"""
+    items = [
+        QuickReplyButton(action=MessageAction(label=label, text=label))
+        for (label, _) in kana_groups.get(category, [])
+    ]
+    return QuickReply(items=items)
+
+
+def kana_group_flex(row: str) -> dict:
+    """將單行假名變成 Flex (Carousel 只有 1 bubble)"""
+    bubble = {
+        "type": "bubble",
+        "body": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [{"type": "text", "text": row, "size": "xl", "align": "center"}],
+        },
+    }
+    return {"type": "carousel", "contents": [bubble]}
+# ──────────────────────────────────
 
 # ── LINE MessageEvent 處理 ──────────────────
 @handler.add(MessageEvent, message=TextMessage)
@@ -144,14 +160,22 @@ def handle_msg(event):
             TextSendMessage("請選擇：清音 / 濁音 / 半濁音", quick_reply=kana_category_quick_reply()),
         )
 
-    # 2️⃣ 顯示對應分類的假名 Flex
+    # 2️⃣ 顯示對應分類的『行』選單
     elif text in ("清音", "濁音", "半濁音"):
         line_bot_api.reply_message(
             event.reply_token,
-            FlexSendMessage(alt_text=f"平假名（{text}）", contents=kana_flex(text))
+            TextSendMessage(f"請選擇 {text} 的行別👇", quick_reply=kana_group_quick_reply(text)),
         )
 
-    # 3️⃣ 幫助
+    # 3️⃣ 使用者點選某一行 → 顯示 5 個假名 Flex
+    elif text in label_to_row:
+        row = label_to_row[text]
+        line_bot_api.reply_message(
+            event.reply_token,
+            FlexSendMessage(alt_text=text, contents=kana_group_flex(row))
+        )
+
+    # 4️⃣ 幫助
     elif text == "幫助":
         line_bot_api.reply_message(
             event.reply_token,
@@ -160,7 +184,7 @@ def handle_msg(event):
             )
         )
 
-    # 4️⃣ 其他輸入
+    # 5️⃣ 其他輸入
     else:
         line_bot_api.reply_message(event.reply_token, TextSendMessage("輸入「我要練習」來開始唷 ✍️"))
 # ──────────────────────────────────
@@ -171,13 +195,6 @@ def callback():
     signature = request.headers.get("X-Line-Signature", "")
     body      = request.get_data(as_text=True)
     try:
-        handler.handle(body, signature)  # 你可以先註解此行來暫停處理事件
+        handler.handle(body, signature)  # 若暫時不需要處理事件，可註解此行
     except InvalidSignatureError:
-        abort(400)
-    return "OK"
-# ──────────────────────────────────
-
-if __name__ == "__main__":
-    # Render 預設 PORT 環境變數
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+        abort(
