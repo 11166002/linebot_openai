@@ -1,125 +1,109 @@
-const kanaList = [
-  {
-    kana: "あ",
-    audio: "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7).m4a"
-  },
-  {
-    kana: "い",
-    audio: "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)1.m4a"
-  },
-  {
-    kana: "う",
-    audio: "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)2.m4a"
-  },
-  {
-    kana: "え",
-    audio: "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)3.m4a"
-  },
-  {
-    kana: "お",
-    audio: "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)4.m4a"
-  },
-  {
-    kana: "か",
-    audio: "https://raw.githubusercontent.com/11166002/audio-files/main/%E4%B8%83%E6%B5%B7(%E5%A5%B3%E6%80%A7)5.m4a"
-  }
-];
+from flask import Flask, request, jsonify, render_template, abort
+import os, io
+from google.cloud import vision
 
-let currentKana = null;
+from linebot import LineBotApi, WebhookHandler
+from linebot.exceptions import InvalidSignatureError
+from linebot.models import *
 
-function nextQuestion() {
-  const q = kanaList[Math.floor(Math.random() * kanaList.length)];
-  currentKana = q.kana;
-  document.getElementById("question").innerText = q.kana;
+# ── 🔑 必填 ───────────────────────────
+LINE_CHANNEL_ACCESS_TOKEN = "liqx01baPcbWbRF5if7oqBsZyf2+2L0eTOwvbIJ6f2Wec6is4sVd5onjl4fQAmc4n8EuqMfo7prlaG5la6kXb/y1gWOnk8ztwjjx2ZnukQbPJQeDwwcPEdFTOGOmQ1t88bQLvgQVczlzc/S9Q/6y5gdB04t89/1O/w1cDnyilFU="
+LINE_CHANNEL_SECRET       = "cd9fbd2ce22b12f243c5fcd2d97e5680"
+LIFF_URL                  = "https://liff.line.me/2007396139-Q0E29b2o"
+# ────────────────────────────────────
 
-  const audio = document.getElementById("audio");
-  audio.src = q.audio;
-  audio.play();
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "credentials.json"
 
-  clearCanvas();
-}
+app = Flask(__name__)
+UPLOAD_FOLDER = "static"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-function clearCanvas() {
-  const canvas = document.getElementById("canvas");
-  const ctx = canvas.getContext("2d");
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  document.getElementById("result").innerText = "";
-}
+# ── Google Vision OCR ─────────────────
+def detect_kana(img_path: str) -> str:
+    client = vision.ImageAnnotatorClient()
+    with io.open(img_path, "rb") as f:
+        content = f.read()
+    image = vision.Image(content=content)
+    res   = client.text_detection(image=image)
+    return res.text_annotations[0].description.strip() if res.text_annotations else "👀 沒找到假名，再寫一次吧！"
+# ────────────────────────────────────
 
-function sendImage() {
-  if (!currentKana) {
-    alert("請先點『下一題』！");
-    return;
-  }
+# ── LINE Bot init ───────────────────
+line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
+handler      = WebhookHandler(LINE_CHANNEL_SECRET)
+# ────────────────────────────────────
 
-  const canvas = document.getElementById("canvas");
-  const imageData = canvas.toDataURL("image/png");
+# ── Web UI ──────────────────────────
+@app.route("/")
+def home():
+    return render_template("index.html")
 
-  fetch("https://你的-render-url/check", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      image: imageData,
-      answer: currentKana
-    })
-  })
-    .then(res => res.json())
-    .then(data => {
-      document.getElementById("result").innerText =
-        data.correct
-          ? `✅ 答對了！（分數：${data.score}）`
-          : `❌ 錯了喔～（分數：${data.score}）`;
-    })
-    .catch(err => {
-      console.error(err);
-      alert("❌ 發生錯誤，請稍後再試");
-    });
-}
+@app.route("/upload", methods=["POST"])
+def upload():
+    if "image" not in request.files:
+        return jsonify({"error": "請先選擇圖片！"}), 400
+    f = request.files["image"]
+    save_to = os.path.join(UPLOAD_FOLDER, "input.png")
+    f.save(save_to)
+    txt = detect_kana(save_to)
+    return jsonify(
+        {
+            "recognized_text": f"🎌【Japan Learning Game】判定你寫的是：「{txt}」！🌟",
+            "note": "📣 如果不是你想寫的，再試一次也沒關係，加油！",
+        }
+    )
+# ────────────────────────────────────
 
-// 畫圖邏輯
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
-let drawing = false;
+# ── LINE Webhook ─────────────────────
+@app.route("/callback", methods=["POST"])
+def callback():
+    signature = request.headers["X-Line-Signature"]
+    body      = request.get_data(as_text=True)
+    try:
+        handler.handle(body, signature)
+    except InvalidSignatureError:
+        abort(400)
+    return "OK"
 
-canvas.addEventListener("mousedown", () => drawing = true);
-canvas.addEventListener("mouseup", () => {
-  drawing = false;
-  ctx.beginPath();
-});
-canvas.addEventListener("mousemove", draw);
+def kana_flex():
+    rows = [
+        "あ い う え お", "か き く け こ", "さ し す せ そ",
+        "た ち つ て と", "な に ぬ ね の", "は ひ ふ へ ほ",
+        "ま み む め も", "や   ゆ   よ",   "ら り る れ ろ", "わ   を   ん",
+    ]
+    bubbles = [
+        {
+            "type": "bubble",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [{"type": "text", "text": r, "size": "xl", "align": "center"}],
+            },
+        }
+        for r in rows
+    ]
+    return {"type": "carousel", "contents": bubbles[:10]}
 
-canvas.addEventListener("touchstart", e => {
-  drawing = true;
-  drawTouch(e);
-});
-canvas.addEventListener("touchend", () => {
-  drawing = false;
-  ctx.beginPath();
-});
-canvas.addEventListener("touchmove", drawTouch);
+@handler.add(MessageEvent, message=TextMessage)
+def handle_msg(event):
+    text = event.message.text.strip()
+    if text == "我要練習":
+        qr = QuickReply(items=[
+            QuickReplyButton(action=URIAction(label="打開畫板", uri=LIFF_URL)),
+            QuickReplyButton(action=MessageAction(label="平假名表", text="平假名表")),
+            QuickReplyButton(action=MessageAction(label="幫助",      text="幫助")),
+        ])
+        line_bot_api.reply_message(event.reply_token, TextSendMessage("選擇功能👇", quick_reply=qr))
+    elif text == "平假名表":
+        line_bot_api.reply_message(
+            event.reply_token,
+            FlexSendMessage(alt_text="平假名 50 音", contents=kana_flex())
+        )
+    elif text == "幫助":
+        line_bot_api.reply_message(event.reply_token, TextSendMessage("輸入「我要練習」→ 點打開畫板 → 上傳手寫假名圖片。"))
+    else:
+        line_bot_api.reply_message(event.reply_token, TextSendMessage("輸入「我要練習」來開始唷 ✍️"))
 
-function draw(e) {
-  if (!drawing) return;
-  const rect = canvas.getBoundingClientRect();
-  ctx.lineWidth = 4;
-  ctx.lineCap = "round";
-  ctx.strokeStyle = "#000";
-  ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
-}
-
-function drawTouch(e) {
-  if (!drawing) return;
-  e.preventDefault();
-  const touch = e.touches[0];
-  const rect = canvas.getBoundingClientRect();
-  ctx.lineWidth = 4;
-  ctx.lineCap = "round";
-  ctx.strokeStyle = "#000";
-  ctx.lineTo(touch.clientX - rect.left, touch.clientY - rect.top);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(touch.clientX - rect.left, touch.clientY - rect.top);
-}
+# ────────────────────────────────────
+if __name__ == "__main__":
+    app.run(debug=True)
