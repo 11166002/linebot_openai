@@ -1,5 +1,4 @@
 flask
-line-bot-sdk
-opencv-python
-scikit-image
 gunicorn
+google-cloud-vision
+line-bot-sdk
