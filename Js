@@ -1,3 +1,4 @@
+// 顯示對比題
 function selectPair(kana1, kana2) {
   document.getElementById("output").innerText = `你選擇的是：${kana1} vs ${kana2}`;
   document.getElementById("question-area").style.display = "block";
@@ -5,6 +6,61 @@ function selectPair(kana1, kana2) {
   document.getElementById("canvas-feedback").innerText = "";
 }
 
+// 顯示單一隨機題
+function nextQuestion() {
+  const q = kanaList[Math.floor(Math.random() * kanaList.length)];
+  currentKana = q.kana;
+  document.getElementById("question").innerText = q.kana;
+
+  const audio = document.getElementById("audio");
+  audio.src = q.audio;
+  audio.play();
+
+  clearCanvas();
+}
+
+// 上傳 Canvas 圖片給後端辨識
+function sendImage() {
+  if (!currentKana) {
+    alert("請先點『下一題』！");
+    return;
+  }
+
+  const canvas = document.getElementById("canvas");
+  const imageData = canvas.toDataURL("image/png");
+
+  fetch("https://你的-render-url/check", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ image: imageData, answer: currentKana })
+  })
+    .then(res => res.json())
+    .then(data => {
+      document.getElementById("result").innerText =
+        data.correct
+          ? `✅ 答對了！（分數：${data.score}）`
+          : `❌ 錯了喔～（分數：${data.score}）`;
+    })
+    .catch(err => {
+      console.error(err);
+      alert("❌ 發生錯誤，請稍後再試");
+    });
+}
+
+// 模擬辨識（可改為真實後端判斷）
+function submitCanvas() {
+  const result = prompt("你寫的是哪個假名？（請輸入 す 或 そ）");
+
+  if (result === "す") {
+    document.getElementById("canvas-feedback").innerText = "✅ 恭喜，正確！";
+  } else if (result === "そ") {
+    document.getElementById("canvas-feedback").innerText = "❌ 你可能寫的是 ‘そ’，再試一次吧！";
+  } else {
+    document.getElementById("canvas-feedback").innerText = "⚠️ 無法辨識，請再寫一次";
+  }
+}
+
+// 畫布與繪圖邏輯
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 let drawing = false;
@@ -65,20 +121,9 @@ canvas.addEventListener("touchmove", e => {
   ctx.moveTo(pos.x, pos.y);
 });
 
+// 清空畫布
 function clearCanvas() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-}
-
-function submitCanvas() {
-  // 模擬辨識流程（可接後端）：
-  const result = prompt("你寫的是哪個假名？（請輸入 す 或 そ）");
-
-  if (result === "す") {
-    document.getElementById("canvas-feedback").innerText = "✅ 恭喜，正確！";
-    // 可加：延遲後跳下一題
-  } else if (result === "そ") {
-    document.getElementById("canvas-feedback").innerText = "❌ 你可能寫的是 ‘そ’，再試一次吧！";
-  } else {
-    document.getElementById("canvas-feedback").innerText = "⚠️ 無法辨識，請再寫一次";
-  }
+  document.getElementById("result").innerText = "";
+  document.getElementById("canvas-feedback").innerText = "";
 }
