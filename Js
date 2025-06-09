@@ -1,0 +1,84 @@
+function selectPair(kana1, kana2) {
+  document.getElementById("output").innerText = `你選擇的是：${kana1} vs ${kana2}`;
+  document.getElementById("question-area").style.display = "block";
+  clearCanvas();
+  document.getElementById("canvas-feedback").innerText = "";
+}
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+let drawing = false;
+
+function getPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (e.clientX || e.touches?.[0]?.clientX) - rect.left,
+    y: (e.clientY || e.touches?.[0]?.clientY) - rect.top
+  };
+}
+
+canvas.addEventListener("mousedown", e => {
+  drawing = true;
+  const pos = getPos(e);
+  ctx.beginPath();
+  ctx.moveTo(pos.x, pos.y);
+});
+
+canvas.addEventListener("mouseup", () => {
+  drawing = false;
+  ctx.beginPath();
+});
+
+canvas.addEventListener("mousemove", e => {
+  if (!drawing) return;
+  const pos = getPos(e);
+  ctx.lineWidth = 4;
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "#000";
+  ctx.lineTo(pos.x, pos.y);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(pos.x, pos.y);
+});
+
+canvas.addEventListener("touchstart", e => {
+  e.preventDefault();
+  drawing = true;
+  const pos = getPos(e);
+  ctx.beginPath();
+  ctx.moveTo(pos.x, pos.y);
+});
+
+canvas.addEventListener("touchend", e => {
+  e.preventDefault();
+  drawing = false;
+  ctx.beginPath();
+});
+
+canvas.addEventListener("touchmove", e => {
+  e.preventDefault();
+  if (!drawing) return;
+  const pos = getPos(e);
+  ctx.lineTo(pos.x, pos.y);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(pos.x, pos.y);
+});
+
+function clearCanvas() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function submitCanvas() {
+  // 模擬辨識流程（可接後端）：
+  const result = prompt("你寫的是哪個假名？（請輸入 す 或 そ）");
+
+  if (result === "す") {
+    document.getElementById("canvas-feedback").innerText = "✅ 恭喜，正確！";
+    // 可加：延遲後跳下一題
+  } else if (result === "そ") {
+    document.getElementById("canvas-feedback").innerText = "❌ 你可能寫的是 ‘そ’，再試一次吧！";
+  } else {
+    document.getElementById("canvas-feedback").innerText = "⚠️ 無法辨識，請再寫一次";
+  }
+}
