@@ -27,49 +27,64 @@ def detect_kana(img_path: str) -> str:
     return res.text_annotations[0].description.strip() if res.text_annotations else "👀 沒找到假名，再寫一次吧！"
 # ────────────────────────────────────
 
-# ── LINE Bot init ───────────────────
-line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
-handler      = WebhookHandler(LINE_CHANNEL_SECRET)
-# ────────────────────────────────────
-
-# ── Web UI ──────────────────────────
+# ── Web UI ─────────────────────────
 @app.route("/")
 def home():
+    """顯示前端畫板 (templates/index.html)"""
     return render_template("index.html")
 
-@app.route("/upload", methods=["POST"])
-def upload():
-    if "image" not in request.files:
-        return jsonify({"error": "請先選擇圖片！"}), 400
-    f = request.files["image"]
-    save_to = os.path.join(UPLOAD_FOLDER, "input.png")
-    f.save(save_to)
-    txt = detect_kana(save_to)
-    return jsonify(
-        {
-            "recognized_text": f"🎌【Japan Learning Game】判定你寫的是：「{txt}」！🌟",
-            "note": "📣 如果不是你想寫的，再試一次也沒關係，加油！",
-        }
-    )
-# ────────────────────────────────────
+@app.route("/check", methods=["POST"])
+def check_image():
+    """前端上傳 base64 圖片 + 正確答案，回傳比對結果"""
+    data = request.json or {}
+    image_data = data.get("image")
+    answer     = data.get("answer")
 
-# ── LINE Webhook ─────────────────────
-@app.route("/callback", methods=["POST"])
-def callback():
-    signature = request.headers["X-Line-Signature"]
-    body      = request.get_data(as_text=True)
+    if not image_data or not answer:
+        return jsonify({"correct": False, "error": "缺少 image 或 answer"}), 400
+
+    # 儲存使用者圖片
+    header, encoded = image_data.split(",", 1)
+    user_img_path = os.path.join(UPLOAD_FOLDER, "user_input.png")
+    with open(user_img_path, "wb") as f:
+        f.write(base64.b64decode(encoded))
+
+    correct_img_path = os.path.join(SAMPLE_FOLDER, f"{answer}.png")
+    if not os.path.exists(correct_img_path):
+        return jsonify({"correct": False, "error": f"找不到範例 {answer}.png"}), 404
+
     try:
-        handler.handle(body, signature)
-    except InvalidSignatureError:
-        abort(400)
-    return "OK"
+        score = compare_images(user_img_path, correct_img_path)
+        return jsonify({
+            "correct": score > 0.6,
+            "score"  : round(score, 3),
+            "message": "✅ 答對！太棒了！" if score > 0.6 else "❌ 再試一次，加油！"
+        })
+    except Exception as e:
+        return jsonify({"correct": False, "error": str(e)}), 500
+# ──────────────────────────────────
 
-def kana_flex():
-    rows = [
-        "あ い う え お", "か き く け こ", "さ し す せ そ",
-        "た ち つ て と", "な に ぬ ね の", "は ひ ふ へ ほ",
-        "ま み む め も", "や   ゆ   よ",   "ら り る れ ろ", "わ   を   ん",
-    ]
+# ── Kana Flex / Quick Reply 工具函式 ──────────────────
+
+def kana_flex(category: str = "清音") -> dict:
+    """依分類回傳平假名 Flex Carousel"""
+    if category == "清音":
+        rows = [
+            "あ い う え お", "か き く け こ", "さ し す せ そ",
+            "た ち つ て と", "な に ぬ ね の", "は ひ ふ へ ほ",
+            "ま み む め も", "や   ゆ   よ", "ら り る れ ろ", "わ   を   ん",
+        ]
+    elif category == "濁音":
+        rows = [
+            "が ぎ ぐ げ ご", "ざ じ ず ぜ ぞ", "だ ぢ づ で ど", "ば び ぶ べ ぼ",
+        ]
+    elif category == "半濁音":
+        rows = [
+            "ぱ ぴ ぷ ぺ ぽ",
+        ]
+    else:
+        rows = []
+
     bubbles = [
         {
             "type": "bubble",
@@ -81,11 +96,24 @@ def kana_flex():
         }
         for r in rows
     ]
-    return {"type": "carousel", "contents": bubbles[:10]}
+    return {"type": "carousel", "contents": bubbles}
 
+
+def kana_category_quick_reply() -> QuickReply:
+    """回傳『清音／濁音／半濁音』快速選單"""
+    return QuickReply(items=[
+        QuickReplyButton(action=MessageAction(label="清音", text="清音")),
+        QuickReplyButton(action=MessageAction(label="濁音", text="濁音")),
+        QuickReplyButton(action=MessageAction(label="半濁音", text="半濁音")),
+    ])
+# ─────────────────────────────────────────────
+
+# ── LINE MessageEvent 處理 ──────────────────
 @handler.add(MessageEvent, message=TextMessage)
 def handle_msg(event):
     text = event.message.text.strip()
+
+    # 0️⃣ 進入主功能選單
     if text == "我要練習":
         qr = QuickReply(items=[
             QuickReplyButton(action=URIAction(label="打開畫板", uri=LIFF_URL)),
@@ -93,16 +121,48 @@ def handle_msg(event):
             QuickReplyButton(action=MessageAction(label="幫助",      text="幫助")),
         ])
         line_bot_api.reply_message(event.reply_token, TextSendMessage("選擇功能👇", quick_reply=qr))
+
+    # 1️⃣ 平假名表 → 顯示分類選單
     elif text == "平假名表":
         line_bot_api.reply_message(
             event.reply_token,
-            FlexSendMessage(alt_text="平假名 50 音", contents=kana_flex())
+            TextSendMessage("請選擇：清音 / 濁音 / 半濁音", quick_reply=kana_category_quick_reply()),
         )
+
+    # 2️⃣ 顯示對應分類的假名 Flex
+    elif text in ("清音", "濁音", "半濁音"):
+        line_bot_api.reply_message(
+            event.reply_token,
+            FlexSendMessage(alt_text=f"平假名（{text}）", contents=kana_flex(text))
+        )
+
+    # 3️⃣ 幫助
     elif text == "幫助":
-        line_bot_api.reply_message(event.reply_token, TextSendMessage("輸入「我要練習」→ 點打開畫板 → 上傳手寫假名圖片。"))
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(
+                "步驟：\n1️⃣ 輸入「我要練習」\n2️⃣ 點『打開畫板』作答\n3️⃣ 系統用 SSIM 判斷對錯 🎯"
+            )
+        )
+
+    # 4️⃣ 其他輸入
     else:
         line_bot_api.reply_message(event.reply_token, TextSendMessage("輸入「我要練習」來開始唷 ✍️"))
+# ──────────────────────────────────
 
-# ────────────────────────────────────
+# ── LINE Webhook 入口 ───────────────────
+@app.route("/callback", methods=["POST"])
+def callback():
+    signature = request.headers.get("X-Line-Signature", "")
+    body      = request.get_data(as_text=True)
+    try:
+        handler.handle(body, signature)  # 你可以先註解此行來暫停處理事件
+    except InvalidSignatureError:
+        abort(400)
+    return "OK"
+# ──────────────────────────────────
+
 if __name__ == "__main__":
-    app.run()
+    # Render 預設 PORT 環境變數
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
