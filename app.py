@@ -24,7 +24,6 @@ SAMPLE_FOLDER = os.path.join(BASE_DIR, "samples")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(SAMPLE_FOLDER, exist_ok=True)
 
-# ── Image Similarity (SSIM) ────────────────
 def compare_images(user_img_path: str, correct_img_path: str) -> float:
     img1 = cv2.imread(user_img_path, cv2.IMREAD_GRAYSCALE)
     img2 = cv2.imread(correct_img_path, cv2.IMREAD_GRAYSCALE)
@@ -33,14 +32,10 @@ def compare_images(user_img_path: str, correct_img_path: str) -> float:
     img1, img2 = [cv2.resize(i, (200, 200)) for i in (img1, img2)]
     score, _ = ssim(img1, img2, full=True)
     return score
-# ──────────────────────────────────────────
 
-# ── LINE Bot init ─────────────────────────
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler      = WebhookHandler(LINE_CHANNEL_SECRET)
-# ─────────────────────────────────────────
 
-# ── Web UI ────────────────────────────────
 @app.route("/")
 def home():
     return render_template("index.html")
@@ -72,7 +67,6 @@ def check_image():
         })
     except Exception as e:
         return jsonify({"correct": False, "error": str(e)}), 500
-# ─────────────────────────────────────────
 
 def kana_flex(category: str = "Seion") -> dict:
     if category == "Seion":
@@ -94,39 +88,55 @@ def kana_flex(category: str = "Seion") -> dict:
 
     bubbles = []
     for row in rows:
-        for kana in row.strip().split():
-            bubble = {
-                "type": "bubble",
-                "size": "micro",
-                "body": {
-                    "type": "box",
-                    "layout": "vertical",
-                    "contents": [
-                        {
-                            "type": "button",
-                            "action": {
-                                "type": "message",
-                                "label": kana,
-                                "text": kana
-                            },
-                            "style": "primary",
-                            "height": "sm"
-                        }
-                    ]
-                }
+        bubble = {
+            "type": "bubble",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "button",
+                        "action": {
+                            "type": "message",
+                            "label": row.strip(),
+                            "text": row.strip()
+                        },
+                        "style": "primary",
+                        "height": "sm"
+                    }
+                ]
             }
-            bubbles.append(bubble)
+        }
+        bubbles.append(bubble)
 
     return {"type": "carousel", "contents": bubbles}
 
-
-
-def kana_category_quick_reply() -> QuickReply:
-    return QuickReply(items=[
-        QuickReplyButton(action=MessageAction(label="Seion", text="Seion")),
-        QuickReplyButton(action=MessageAction(label="Dakuon", text="Dakuon")),
-        QuickReplyButton(action=MessageAction(label="Handakuon", text="Handakuon")),
-    ])
+def generate_kana_buttons(row: str) -> dict:
+    kana_list = row.strip().split()
+    bubbles = []
+    for kana in kana_list:
+        bubble = {
+            "type": "bubble",
+            "size": "micro",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "button",
+                        "action": {
+                            "type": "message",
+                            "label": kana,
+                            "text": kana
+                        },
+                        "style": "primary",
+                        "height": "sm"
+                    }
+                ]
+            }
+        }
+        bubbles.append(bubble)
+    return {"type": "carousel", "contents": bubbles}
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_msg(event):
@@ -136,14 +146,18 @@ def handle_msg(event):
         qr = QuickReply(items=[
             QuickReplyButton(action=URIAction(label="Open Canvas", uri=LIFF_URL)),
             QuickReplyButton(action=MessageAction(label="Kana Table", text="Kana Table")),
-            QuickReplyButton(action=MessageAction(label="Help",        text="Help")),
+            QuickReplyButton(action=MessageAction(label="Help", text="Help")),
         ])
         line_bot_api.reply_message(event.reply_token, TextSendMessage("Choose a function 👇", quick_reply=qr))
 
     elif text == "Kana Table":
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage("Please choose: Seion / Dakuon / Handakuon", quick_reply=kana_category_quick_reply()),
+            TextSendMessage("Please choose: Seion / Dakuon / Handakuon", quick_reply=QuickReply(items=[
+                QuickReplyButton(action=MessageAction(label="Seion", text="Seion")),
+                QuickReplyButton(action=MessageAction(label="Dakuon", text="Dakuon")),
+                QuickReplyButton(action=MessageAction(label="Handakuon", text="Handakuon")),
+            ])),
         )
 
     elif text in ("Seion", "Dakuon", "Handakuon"):
@@ -152,13 +166,18 @@ def handle_msg(event):
             FlexSendMessage(alt_text=f"Kana ({text})", contents=kana_flex(text))
         )
 
-    elif text == "Help":
+    elif text in [
+        "あ い う え お", "か き く け こ", "さ し す せ そ",
+        "た ち つ て と", "な に ぬ ね の", "は ひ ふ へ ほ",
+        "ま み む め も", "や ゆ よ", "ら り る れ ろ", "わ を ん",
+        "が ぎ ぐ げ ご", "ざ じ ず ぜ ぞ", "だ ぢ づ で ど", "ば び ぶ べ ぼ",
+        "ぱ ぴ ぷ ぺ ぽ"
+    ]:
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(
-                "Steps:\n1️⃣ Type 'Start Practice'\n2️⃣ Click 'Open Canvas' to draw\n3️⃣ System uses SSIM to check accuracy 🎯"
-            )
+            FlexSendMessage(alt_text="Select a kana", contents=generate_kana_buttons(text))
         )
+
     elif text in [
         "あ", "い", "う", "え", "お",
         "か", "き", "く", "け", "こ",
@@ -178,7 +197,7 @@ def handle_msg(event):
     ]:
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(f"You selected: {text}\nYou can now try writing it!")
+            TextSendMessage(f"You selected: {text}")
         )
 
     else:
