@@ -92,18 +92,32 @@ def kana_flex(category: str = "Seion") -> dict:
     else:
         rows = []
 
-    bubbles = [
-        {
-            "type": "bubble",
-            "body": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [{"type": "text", "text": r, "size": "xl", "align": "center"}],
-            },
-        }
-        for r in rows
-    ]
+    bubbles = []
+    for row in rows:
+        for kana in row.strip().split():
+            bubble = {
+                "type": "bubble",
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "button",
+                            "action": {
+                                "type": "message",
+                                "label": kana,
+                                "text": kana
+                            },
+                            "style": "primary",
+                            "height": "sm"
+                        }
+                    ]
+                }
+            }
+            bubbles.append(bubble)
+
     return {"type": "carousel", "contents": bubbles}
+
 
 
 def kana_category_quick_reply() -> QuickReply:
