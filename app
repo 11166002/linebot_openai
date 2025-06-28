@@ -1,7 +1,6 @@
 from flask import Flask, request, jsonify, render_template, abort
-import os, io
-from google.cloud import vision
-
+import os, base64, cv2
+from skimage.metrics import structural_similarity as ssim
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import *
@@ -11,21 +10,37 @@ LINE_CHANNEL_ACCESS_TOKEN = "liqx01baPcbWbRF5if7oqBsZyf2+2L0eTOwvbIJ6f2Wec6is4sV
 LINE_CHANNEL_SECRET       = "cd9fbd2ce22b12f243c5fcd2d97e5680"
 LIFF_URL                  = "https://liff.line.me/2007396139-Q0E29b2o"
 # ────────────────────────────────────
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "credentials.json"
 
-app = Flask(__name__)
-UPLOAD_FOLDER = "static"
+# Flask 專案根目錄
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+
+app = Flask(
+    __name__,
+    template_folder=os.path.join(BASE_DIR, "templates"),  # 確保能找到 index.html
+    static_folder=os.path.join(BASE_DIR, "static")
+)
+
+UPLOAD_FOLDER = os.path.join(BASE_DIR, "static")
+SAMPLE_FOLDER = os.path.join(BASE_DIR, "samples")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(SAMPLE_FOLDER, exist_ok=True)
 
-# ── Google Vision OCR ─────────────────
-def detect_kana(img_path: str) -> str:
-    client = vision.ImageAnnotatorClient()
-    with io.open(img_path, "rb") as f:
-        content = f.read()
-    image = vision.Image(content=content)
-    res   = client.text_detection(image=image)
-    return res.text_annotations[0].description.strip() if res.text_annotations else "👀 沒找到假名，再寫一次吧！"
-# ────────────────────────────────────
+# ── 圖像相似度（SSIM）──────────────
+def compare_images(user_img_path: str, correct_img_path: str) -> float:
+    """讀取兩張圖片並以 SSIM 計算相似度，0~1 越高越像"""
+    img1 = cv2.imread(user_img_path, cv2.IMREAD_GRAYSCALE)
+    img2 = cv2.imread(correct_img_path, cv2.IMREAD_GRAYSCALE)
+    if img1 is None or img2 is None:
+        raise FileNotFoundError("❌ 無法載入圖片（user or sample）")
+    img1, img2 = [cv2.resize(i, (200, 200)) for i in (img1, img2)]
+    score, _ = ssim(img1, img2, full=True)
+    return score
+# ──────────────────────────────────
+
+# ── LINE Bot init ──────────────────
+line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
+handler      = WebhookHandler(LINE_CHANNEL_SECRET)
+# ──────────────────────────────────
 
 # ── Web UI ─────────────────────────
 @app.route("/")
@@ -166,3 +181,4 @@ if __name__ == "__main__":
     # Render 預設 PORT 環境變數
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
