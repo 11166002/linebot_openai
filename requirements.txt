@@ -1,4 +1,4 @@
-flask
-gunicorn
-google-cloud-vision
+Flask
 line-bot-sdk
+opencv-python
+scikit-image
