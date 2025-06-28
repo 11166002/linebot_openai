@@ -75,24 +75,16 @@ def kana_flex(category: str = "Seion") -> dict:
             "た ち つ て と", "な に ぬ ね の", "は ひ ふ へ ほ",
             "ま み む め も", "や ゆ よ", "ら り る れ ろ", "わ を ん",
         ]
-        color = "#FFD93D"  # yellow
-        emoji = "🟡"
     elif category == "Dakuon":
         rows = [
             "が ぎ ぐ げ ご", "ざ じ ず ぜ ぞ", "だ ぢ づ で ど", "ば び ぶ べ ぼ",
         ]
-        color = "#E0E0E0"  # gray
-        emoji = "⚪"
     elif category == "Handakuon":
         rows = [
             "ぱ ぴ ぷ ぺ ぽ",
         ]
-        color = "#FFFFFF"  # white
-        emoji = "⬜"
     else:
         rows = []
-        color = "#AAAAAA"
-        emoji = ""
 
     bubbles = []
     for row in rows:
@@ -106,11 +98,10 @@ def kana_flex(category: str = "Seion") -> dict:
                         "type": "button",
                         "action": {
                             "type": "message",
-                            "label": f"{emoji} {row.strip()}",
+                            "label": row.strip(),
                             "text": row.strip()
                         },
                         "style": "primary",
-                        "color": color,
                         "height": "sm"
                     }
                 ]
@@ -139,7 +130,6 @@ def generate_kana_buttons(row: str) -> dict:
                             "text": kana
                         },
                         "style": "primary",
-                        "color": "#FAFAFA",
                         "height": "sm"
                     }
                 ]
