@@ -5,18 +5,17 @@ from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import *
 
-# ── 🔑 必填 ───────────────────────────
+# ── 🔑 Required ───────────────────────────
 LINE_CHANNEL_ACCESS_TOKEN = "liqx01baPcbWbRF5if7oqBsZyf2+2L0eTOwvbIJ6f2Wec6is4sVd5onjl4fQAmc4n8EuqMfo7prlaG5la6kXb/y1gWOnk8ztwjjx2ZnukQbPJQeDwwcPEdFTOGOmQ1t88bQLvgQVczlzc/S9Q/6y5gdB04t89/1O/w1cDnyilFU="
 LINE_CHANNEL_SECRET       = "cd9fbd2ce22b12f243c5fcd2d97e5680"
 LIFF_URL                  = "https://liff.line.me/2007396139-Q0E29b2o"
-# ────────────────────────────────────
+# ─────────────────────────────────────────
 
-# Flask 專案根目錄
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 app = Flask(
     __name__,
-    template_folder=os.path.join(BASE_DIR, "templates"),  # 確保能找到 index.html
+    template_folder=os.path.join(BASE_DIR, "templates"),
     static_folder=os.path.join(BASE_DIR, "static")
 )
 
@@ -25,40 +24,36 @@ SAMPLE_FOLDER = os.path.join(BASE_DIR, "samples")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(SAMPLE_FOLDER, exist_ok=True)
 
-# ── 圖像相似度（SSIM）──────────────
+# ── Image Similarity (SSIM) ────────────────
 def compare_images(user_img_path: str, correct_img_path: str) -> float:
-    """讀取兩張圖片並以 SSIM 計算相似度，0~1 越高越像"""
     img1 = cv2.imread(user_img_path, cv2.IMREAD_GRAYSCALE)
     img2 = cv2.imread(correct_img_path, cv2.IMREAD_GRAYSCALE)
     if img1 is None or img2 is None:
-        raise FileNotFoundError("❌ 無法載入圖片（user or sample）")
+        raise FileNotFoundError("❌ Unable to load image (user or sample)")
     img1, img2 = [cv2.resize(i, (200, 200)) for i in (img1, img2)]
     score, _ = ssim(img1, img2, full=True)
     return score
-# ──────────────────────────────────
+# ──────────────────────────────────────────
 
-# ── LINE Bot init ──────────────────
+# ── LINE Bot init ─────────────────────────
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler      = WebhookHandler(LINE_CHANNEL_SECRET)
-# ──────────────────────────────────
+# ─────────────────────────────────────────
 
-# ── Web UI ─────────────────────────
+# ── Web UI ────────────────────────────────
 @app.route("/")
 def home():
-    """顯示前端畫板 (templates/index.html)"""
     return render_template("index.html")
 
 @app.route("/check", methods=["POST"])
 def check_image():
-    """前端上傳 base64 圖片 + 正確答案，回傳比對結果"""
     data = request.json or {}
     image_data = data.get("image")
     answer     = data.get("answer")
 
     if not image_data or not answer:
-        return jsonify({"correct": False, "error": "缺少 image 或 answer"}), 400
+        return jsonify({"correct": False, "error": "Missing image or answer"}), 400
 
-    # 儲存使用者圖片
     header, encoded = image_data.split(",", 1)
     user_img_path = os.path.join(UPLOAD_FOLDER, "user_input.png")
     with open(user_img_path, "wb") as f:
@@ -66,34 +61,31 @@ def check_image():
 
     correct_img_path = os.path.join(SAMPLE_FOLDER, f"{answer}.png")
     if not os.path.exists(correct_img_path):
-        return jsonify({"correct": False, "error": f"找不到範例 {answer}.png"}), 404
+        return jsonify({"correct": False, "error": f"Sample {answer}.png not found"}), 404
 
     try:
         score = compare_images(user_img_path, correct_img_path)
         return jsonify({
             "correct": score > 0.6,
             "score"  : round(score, 3),
-            "message": "✅ 答對！太棒了！" if score > 0.6 else "❌ 再試一次，加油！"
+            "message": "✅ Correct! Great job!" if score > 0.6 else "❌ Try again!"
         })
     except Exception as e:
         return jsonify({"correct": False, "error": str(e)}), 500
-# ──────────────────────────────────
+# ─────────────────────────────────────────
 
-# ── Kana Flex / Quick Reply 工具函式 ──────────────────
-
-def kana_flex(category: str = "清音") -> dict:
-    """依分類回傳平假名 Flex Carousel"""
-    if category == "清音":
+def kana_flex(category: str = "Seion") -> dict:
+    if category == "Seion":
         rows = [
             "あ い う え お", "か き く け こ", "さ し す せ そ",
             "た ち つ て と", "な に ぬ ね の", "は ひ ふ へ ほ",
             "ま み む め も", "や   ゆ   よ", "ら り る れ ろ", "わ   を   ん",
         ]
-    elif category == "濁音":
+    elif category == "Dakuon":
         rows = [
             "が ぎ ぐ げ ご", "ざ じ ず ぜ ぞ", "だ ぢ づ で ど", "ば び ぶ べ ぼ",
         ]
-    elif category == "半濁音":
+    elif category == "Handakuon":
         rows = [
             "ぱ ぴ ぷ ぺ ぽ",
         ]
@@ -115,70 +107,53 @@ def kana_flex(category: str = "清音") -> dict:
 
 
 def kana_category_quick_reply() -> QuickReply:
-    """回傳『清音／濁音／半濁音』快速選單"""
     return QuickReply(items=[
-        QuickReplyButton(action=MessageAction(label="清音", text="清音")),
-        QuickReplyButton(action=MessageAction(label="濁音", text="濁音")),
-        QuickReplyButton(action=MessageAction(label="半濁音", text="半濁音")),
+        QuickReplyButton(action=MessageAction(label="Seion", text="Seion")),
+        QuickReplyButton(action=MessageAction(label="Dakuon", text="Dakuon")),
+        QuickReplyButton(action=MessageAction(label="Handakuon", text="Handakuon")),
     ])
-# ─────────────────────────────────────────────
 
-# ── LINE MessageEvent 處理 ──────────────────
 @handler.add(MessageEvent, message=TextMessage)
 def handle_msg(event):
     text = event.message.text.strip()
 
-    # 0️⃣ 進入主功能選單
-    if text == "我要練習":
+    if text == "Start Practice":
         qr = QuickReply(items=[
-            QuickReplyButton(action=URIAction(label="打開畫板", uri=LIFF_URL)),
-            QuickReplyButton(action=MessageAction(label="平假名表", text="平假名表")),
-            QuickReplyButton(action=MessageAction(label="幫助",      text="幫助")),
+            QuickReplyButton(action=URIAction(label="Open Canvas", uri=LIFF_URL)),
+            QuickReplyButton(action=MessageAction(label="Kana Table", text="Kana Table")),
+            QuickReplyButton(action=MessageAction(label="Help",        text="Help")),
         ])
-        line_bot_api.reply_message(event.reply_token, TextSendMessage("選擇功能👇", quick_reply=qr))
+        line_bot_api.reply_message(event.reply_token, TextSendMessage("Choose a function 👇", quick_reply=qr))
 
-    # 1️⃣ 平假名表 → 顯示分類選單
-    elif text == "平假名表":
+    elif text == "Kana Table":
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage("請選擇：清音 / 濁音 / 半濁音", quick_reply=kana_category_quick_reply()),
+            TextSendMessage("Please choose: Seion / Dakuon / Handakuon", quick_reply=kana_category_quick_reply()),
         )
 
-    # 2️⃣ 顯示對應分類的假名 Flex
-    elif text in ("清音", "濁音", "半濁音"):
+    elif text in ("Seion", "Dakuon", "Handakuon"):
         line_bot_api.reply_message(
             event.reply_token,
-            FlexSendMessage(alt_text=f"平假名（{text}）", contents=kana_flex(text))
+            FlexSendMessage(alt_text=f"Kana ({text})", contents=kana_flex(text))
         )
 
-    # 3️⃣ 幫助
-    elif text == "幫助":
+    elif text == "Help":
         line_bot_api.reply_message(
             event.reply_token,
             TextSendMessage(
-                "步驟：\n1️⃣ 輸入「我要練習」\n2️⃣ 點『打開畫板』作答\n3️⃣ 系統用 SSIM 判斷對錯 🎯"
+                "Steps:\n1️⃣ Type 'Start Practice'\n2️⃣ Click 'Open Canvas' to draw\n3️⃣ System uses SSIM to check accuracy 🎯"
             )
         )
 
-    # 4️⃣ 其他輸入
     else:
-        line_bot_api.reply_message(event.reply_token, TextSendMessage("輸入「我要練習」來開始唷 ✍️"))
-# ──────────────────────────────────
+        line_bot_api.reply_message(event.reply_token, TextSendMessage("Type 'Start Practice' to begin ✍️"))
 
-# ── LINE Webhook 入口 ───────────────────
 @app.route("/callback", methods=["POST"])
 def callback():
     signature = request.headers.get("X-Line-Signature", "")
     body      = request.get_data(as_text=True)
     try:
-        handler.handle(body, signature)  # 你可以先註解此行來暫停處理事件
+        handler.handle(body, signature)
     except InvalidSignatureError:
         abort(400)
     return "OK"
-# ──────────────────────────────────
-
-if __name__ == "__main__":
-    # Render 預設 PORT 環境變數
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
-
