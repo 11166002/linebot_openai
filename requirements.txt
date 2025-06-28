@@ -2,3 +2,4 @@ Flask
 line-bot-sdk
 opencv-python
 scikit-image
+gunicorn
