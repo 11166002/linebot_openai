@@ -40,9 +40,9 @@ def compare_images(user_img_path: str, correct_img_path: str) -> float:
 # ✅ 加入這段：資料庫連線函式
 def get_db_connection():
     return mysql.connector.connect(
-        host="127.0.0.1",           # ✅ 請修改為你的主機名稱
-        user="root",                   # ✅ 你的 MySQL 使用者帳號
-        password="0813",               # ✅ 你的 MySQL 密碼
+        host="主機名稱ip",           # ✅ 請修改為你的主機名稱
+        user="MySQL 使用者帳號",                   # ✅ 你的 MySQL 使用者帳號
+        password="MySQL 密碼",               # ✅ 你的 MySQL 密碼
         database="kana_library",       # ✅ 資料庫名稱
         charset='utf8mb4'
     )
