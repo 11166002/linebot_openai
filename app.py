@@ -191,88 +191,87 @@ def handle_msg(event):
             event.reply_token,
             FlexSendMessage(alt_text="Select a kana", contents=generate_kana_buttons(text))
         )
-
     elif text in [
-    "あ", "い", "う", "え", "お",
-    "か", "き", "く", "け", "こ",
-    "さ", "し", "す", "せ", "そ",
-    "た", "ち", "つ", "て", "と",
-    "な", "に", "ぬ", "ね", "の",
-    "は", "ひ", "ふ", "へ", "ほ",
-    "ま", "み", "む", "め", "も",
-    "や", "ゆ", "よ",
-    "ら", "り", "る", "れ", "ろ",
-    "わ", "を", "ん",
-    "が", "ぎ", "ぐ", "げ", "ご",
-    "ざ", "じ", "ず", "ぜ", "ぞ",
-    "だ", "ぢ", "づ", "で", "ど",
-    "ば", "び", "ぶ", "べ", "ぼ",
-    "ぱ", "ぴ", "ぷ", "ぺ", "ぽ"
-]:
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM kana_items WHERE kana = %s", (text,))
-        row = cursor.fetchone()
-        conn.close()
+        "あ", "い", "う", "え", "お",
+        "か", "き", "く", "け", "こ",
+        "さ", "し", "す", "せ", "そ",
+        "た", "ち", "つ", "て", "と",
+        "な", "に", "ぬ", "ね", "の",
+        "は", "ひ", "ふ", "へ", "ほ",
+        "ま", "み", "む", "め", "も",
+        "や", "ゆ", "よ",
+        "ら", "り", "る", "れ", "ろ",
+        "わ", "を", "ん",
+        "が", "ぎ", "ぐ", "げ", "ご",
+        "ざ", "じ", "ず", "ぜ", "ぞ",
+        "だ", "ぢ", "づ", "で", "ど",
+        "ば", "び", "ぶ", "べ", "ぼ",
+        "ぱ", "ぴ", "ぷ", "ぺ", "ぽ"
+    ]:
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("SELECT * FROM kana_items WHERE kana = %s", (text,))
+            row = cursor.fetchone()
+            conn.close()
 
-        if row:
-            flex = {
-                "type": "bubble",
-                "size": "mega",
-                "body": {
-                    "type": "box",
-                    "layout": "vertical",
-                    "contents": [
-                        {
-                            "type": "text",
-                            "text": f"{row['kana']} - Stroke Order",
-                            "weight": "bold",
-                            "size": "xl",
-                            "margin": "md"
-                        },
-                        {
-                            "type": "image",
-                            "url": row["image_url"],
-                            "size": "full",
-                            "aspectMode": "fit",
-                            "margin": "md"
-                        },
-                        {
-                            "type": "text",
-                            "text": row["stroke_order_text"],
-                            "wrap": True,
-                            "margin": "md"
-                        },
-                        {
-                            "type": "button",
-                            "action": {
-                                "type": "uri",
-                                "label": "▶ 聽發音",
-                                "uri": row["audio_url"]
+            if row:
+                flex = {
+                    "type": "bubble",
+                    "size": "mega",
+                    "body": {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": f"{row['kana']} - Stroke Order",
+                                "weight": "bold",
+                                "size": "xl",
+                                "margin": "md"
                             },
-                            "style": "primary",
-                            "margin": "md"
-                        }
-                    ]
+                            {
+                                "type": "image",
+                                "url": row["image_url"],
+                                "size": "full",
+                                "aspectMode": "fit",
+                                "margin": "md"
+                            },
+                            {
+                                "type": "text",
+                                "text": row["stroke_order_text"],
+                                "wrap": True,
+                                "margin": "md"
+                            },
+                            {
+                                "type": "button",
+                                "action": {
+                                    "type": "uri",
+                                    "label": "▶ 聽發音",
+                                    "uri": row["audio_url"]
+                                },
+                                "style": "primary",
+                                "margin": "md"
+                            }
+                        ]
+                    }
                 }
-            }
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    FlexSendMessage(alt_text=f"{row['kana']} 的筆順資料", contents=flex)
+                )
+            else:
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage("⚠️ 找不到資料，請確認是否有輸入正確假名。")
+                )
+
+        except Exception as e:
             line_bot_api.reply_message(
                 event.reply_token,
-                FlexSendMessage(alt_text=f"{row['kana']} 的筆順資料", contents=flex)
+                TextSendMessage(f"❌ 發生錯誤：{str(e)}")
             )
-        else:
-            line_bot_api.reply_message(
-                event.reply_token,
-                TextSendMessage("⚠️ 找不到資料，請確認是否有輸入正確假名。")
-            )
-
-    except Exception as e:
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(f"❌ 發生錯誤：{str(e)}")
-        )
-
+  
 
 @app.route("/callback", methods=["POST"])
 def callback():
