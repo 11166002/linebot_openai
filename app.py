@@ -4,6 +4,8 @@ from skimage.metrics import structural_similarity as ssim
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import *
+import mysql.connector
+from mysql.connector import Error
 
 # ── 🔑 Required ───────────────────────────
 LINE_CHANNEL_ACCESS_TOKEN = "liqx01baPcbWbRF5if7oqBsZyf2+2L0eTOwvbIJ6f2Wec6is4sVd5onjl4fQAmc4n8EuqMfo7prlaG5la6kXb/y1gWOnk8ztwjjx2ZnukQbPJQeDwwcPEdFTOGOmQ1t88bQLvgQVczlzc/S9Q/6y5gdB04t89/1O/w1cDnyilFU="
@@ -33,8 +35,20 @@ def compare_images(user_img_path: str, correct_img_path: str) -> float:
     score, _ = ssim(img1, img2, full=True)
     return score
 
+# ✅ 加入這段：資料庫連線函式
+def get_db_connection():
+    return mysql.connector.connect(
+        host="192.168.0.57",           # ✅ 請修改為你的主機名稱
+        user="root",                # ✅ 你的 MySQL 使用者帳號
+        password="0813",   # ✅ 你的 MySQL 密碼
+        database="kana_library",    # ✅ 資料庫名稱
+        charset='utf8mb4'
+    )
+
+# ✅ LINE BOT 初始化
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler      = WebhookHandler(LINE_CHANNEL_SECRET)
+
 
 @app.route("/")
 def home():
@@ -178,30 +192,87 @@ def handle_msg(event):
             FlexSendMessage(alt_text="Select a kana", contents=generate_kana_buttons(text))
         )
 
-    elif text in [
-        "あ", "い", "う", "え", "お",
-        "か", "き", "く", "け", "こ",
-        "さ", "し", "す", "せ", "そ",
-        "た", "ち", "つ", "て", "と",
-        "な", "に", "ぬ", "ね", "の",
-        "は", "ひ", "ふ", "へ", "ほ",
-        "ま", "み", "む", "め", "も",
-        "や", "ゆ", "よ",
-        "ら", "り", "る", "れ", "ろ",
-        "わ", "を", "ん",
-        "が", "ぎ", "ぐ", "げ", "ご",
-        "ざ", "じ", "ず", "ぜ", "ぞ",
-        "だ", "ぢ", "づ", "で", "ど",
-        "ば", "び", "ぶ", "べ", "ぼ",
-        "ぱ", "ぴ", "ぷ", "ぺ", "ぽ"
-    ]:
+elif text in [
+    "あ", "い", "う", "え", "お",
+    "か", "き", "く", "け", "こ",
+    "さ", "し", "す", "せ", "そ",
+    "た", "ち", "つ", "て", "と",
+    "な", "に", "ぬ", "ね", "の",
+    "は", "ひ", "ふ", "へ", "ほ",
+    "ま", "み", "む", "め", "も",
+    "や", "ゆ", "よ",
+    "ら", "り", "る", "れ", "ろ",
+    "わ", "を", "ん",
+    "が", "ぎ", "ぐ", "げ", "ご",
+    "ざ", "じ", "ず", "ぜ", "ぞ",
+    "だ", "ぢ", "づ", "で", "ど",
+    "ば", "び", "ぶ", "べ", "ぼ",
+    "ぱ", "ぴ", "ぷ", "ぺ", "ぽ"
+]:
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM kana_items WHERE kana = %s", (text,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            flex = {
+                "type": "bubble",
+                "size": "mega",
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": f"{row['kana']} - Stroke Order",
+                            "weight": "bold",
+                            "size": "xl",
+                            "margin": "md"
+                        },
+                        {
+                            "type": "image",
+                            "url": row["image_url"],
+                            "size": "full",
+                            "aspectMode": "fit",
+                            "margin": "md"
+                        },
+                        {
+                            "type": "text",
+                            "text": row["stroke_order_text"],
+                            "wrap": True,
+                            "margin": "md"
+                        },
+                        {
+                            "type": "button",
+                            "action": {
+                                "type": "uri",
+                                "label": "▶ 聽發音",
+                                "uri": row["audio_url"]
+                            },
+                            "style": "primary",
+                            "margin": "md"
+                        }
+                    ]
+                }
+            }
+            line_bot_api.reply_message(
+                event.reply_token,
+                FlexSendMessage(alt_text=f"{row['kana']} 的筆順資料", contents=flex)
+            )
+        else:
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage("⚠️ 找不到資料，請確認是否有輸入正確假名。")
+            )
+
+    except Exception as e:
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(f"You selected: {text}")
+            TextSendMessage(f"❌ 發生錯誤：{str(e)}")
         )
 
-    else:
-        line_bot_api.reply_message(event.reply_token, TextSendMessage("Type 'Start Practice' to begin ✍️"))
 
 @app.route("/callback", methods=["POST"])
 def callback():
