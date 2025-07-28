@@ -192,7 +192,7 @@ def handle_msg(event):
             FlexSendMessage(alt_text="Select a kana", contents=generate_kana_buttons(text))
         )
 
-elif text in [
+    elif text in [
     "あ", "い", "う", "え", "お",
     "か", "き", "く", "け", "こ",
     "さ", "し", "す", "せ", "そ",
