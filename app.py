@@ -43,7 +43,7 @@ def get_db_connection():
         host="192.168.0.57",           # ✅ 請修改為你的主機名稱
         user="root",                   # ✅ 你的 MySQL 使用者帳號
         password="0813",               # ✅ 你的 MySQL 密碼
-        database="kana_library",       # ✅ 資料庫名稱
+        database="kana_items",       # ✅ 資料庫名稱
         charset='utf8mb4'
     )
 
