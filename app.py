@@ -31,7 +31,9 @@ def compare_images(user_img_path: str, correct_img_path: str) -> float:
     img2 = cv2.imread(correct_img_path, cv2.IMREAD_GRAYSCALE)
     if img1 is None or img2 is None:
         raise FileNotFoundError("❌ Unable to load image (user or sample)")
-    img1, img2 = [cv2.resize(i, (200, 200)) for i in (img1, img2)]
+    # resize to reduce memory usage
+    img1 = cv2.resize(img1, (200, 200))
+    img2 = cv2.resize(img2, (200, 200))
     score, _ = ssim(img1, img2, full=True)
     return score
 
@@ -39,9 +41,9 @@ def compare_images(user_img_path: str, correct_img_path: str) -> float:
 def get_db_connection():
     return mysql.connector.connect(
         host="192.168.0.57",           # ✅ 請修改為你的主機名稱
-        user="root",                # ✅ 你的 MySQL 使用者帳號
-        password="0813",   # ✅ 你的 MySQL 密碼
-        database="kana_library",    # ✅ 資料庫名稱
+        user="root",                   # ✅ 你的 MySQL 使用者帳號
+        password="0813",               # ✅ 你的 MySQL 密碼
+        database="kana_library",       # ✅ 資料庫名稱
         charset='utf8mb4'
     )
 
@@ -64,6 +66,10 @@ def check_image():
         return jsonify({"correct": False, "error": "Missing image or answer"}), 400
 
     header, encoded = image_data.split(",", 1)
+    # 限制上傳大小，避免 OOM
+    if len(encoded) > 300000:
+        return jsonify({"correct": False, "error": "❌ Image too large"}), 400
+
     user_img_path = os.path.join(UPLOAD_FOLDER, "user_input.png")
     with open(user_img_path, "wb") as f:
         f.write(base64.b64decode(encoded))
@@ -191,6 +197,7 @@ def handle_msg(event):
             event.reply_token,
             FlexSendMessage(alt_text="Select a kana", contents=generate_kana_buttons(text))
         )
+
     elif text in [
         "あ", "い", "う", "え", "お",
         "か", "き", "く", "け", "こ",
@@ -208,13 +215,13 @@ def handle_msg(event):
         "ば", "び", "ぶ", "べ", "ぼ",
         "ぱ", "ぴ", "ぷ", "ぺ", "ぽ"
     ]:
+        conn = None
+        cursor = None
         try:
             conn = get_db_connection()
             cursor = conn.cursor(dictionary=True)
             cursor.execute("SELECT * FROM kana_items WHERE kana = %s", (text,))
             row = cursor.fetchone()
-            conn.close()
-
             if row:
                 flex = {
                     "type": "bubble",
@@ -252,6 +259,18 @@ def handle_msg(event):
                                 },
                                 "style": "primary",
                                 "margin": "md"
+                            },
+                            {
+                                "type": "button",
+                                "action": {
+                                    "type": "message",
+                                    "label": "↩ 返回清單",
+                                    "text": "Kana Table"
+                                },
+                                "style": "secondary",
+                                "color": "#AAAAAA",
+                                "margin": "md",
+                                "height": "sm"
                             }
                         ]
                     }
@@ -265,13 +284,16 @@ def handle_msg(event):
                     event.reply_token,
                     TextSendMessage("⚠️ 找不到資料，請確認是否有輸入正確假名。")
                 )
-
         except Exception as e:
             line_bot_api.reply_message(
                 event.reply_token,
                 TextSendMessage(f"❌ 發生錯誤：{str(e)}")
             )
-  
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
 
 @app.route("/callback", methods=["POST"])
 def callback():
