@@ -28,8 +28,8 @@ os.makedirs(SAMPLE_FOLDER, exist_ok=True)
 def get_db_connection():
     return pymysql.connect(
         host="localhost",        # 如果是遠端請改為 IP
-        user="你的帳號",
-        password="你的密碼",
+        user="root",
+        password=" ",
         database="kana_library",
         charset="utf8mb4",
         cursorclass=pymysql.cursors.DictCursor
