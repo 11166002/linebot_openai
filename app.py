@@ -1,11 +1,9 @@
 from flask import Flask, request, jsonify, render_template, abort
-import os, base64, cv2
+import os, base64, cv2, pymysql
 from skimage.metrics import structural_similarity as ssim
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import *
-import mysql.connector
-from mysql.connector import Error
 
 # ── 🔑 Required ───────────────────────────
 LINE_CHANNEL_ACCESS_TOKEN = "liqx01baPcbWbRF5if7oqBsZyf2+2L0eTOwvbIJ6f2Wec6is4sVd5onjl4fQAmc4n8EuqMfo7prlaG5la6kXb/y1gWOnk8ztwjjx2ZnukQbPJQeDwwcPEdFTOGOmQ1t88bQLvgQVczlzc/S9Q/6y5gdB04t89/1O/w1cDnyilFU="
@@ -26,31 +24,37 @@ SAMPLE_FOLDER = os.path.join(BASE_DIR, "samples")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(SAMPLE_FOLDER, exist_ok=True)
 
+# ✅ 資料庫連線設定
+def get_db_connection():
+    return pymysql.connect(
+        host="localhost",        # 如果是遠端請改為 IP
+        user="你的帳號",
+        password="你的密碼",
+        database="kana_library",
+        charset="utf8mb4",
+        cursorclass=pymysql.cursors.DictCursor
+    )
+
+def fetch_kana_info(kana):
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT * FROM kana_items WHERE kana = %s", (kana,))
+            return cursor.fetchone()
+    finally:
+        conn.close()
+
 def compare_images(user_img_path: str, correct_img_path: str) -> float:
     img1 = cv2.imread(user_img_path, cv2.IMREAD_GRAYSCALE)
     img2 = cv2.imread(correct_img_path, cv2.IMREAD_GRAYSCALE)
     if img1 is None or img2 is None:
         raise FileNotFoundError("❌ Unable to load image (user or sample)")
-    # resize to reduce memory usage
-    img1 = cv2.resize(img1, (200, 200))
-    img2 = cv2.resize(img2, (200, 200))
+    img1, img2 = [cv2.resize(i, (200, 200)) for i in (img1, img2)]
     score, _ = ssim(img1, img2, full=True)
     return score
 
-# ✅ 加入這段：資料庫連線函式
-def get_db_connection():
-    return mysql.connector.connect(
-        host="主機名稱ip",           # ✅ 請修改為你的主機名稱
-        user="MySQL 使用者帳號",                   # ✅ 你的 MySQL 使用者帳號
-        password="MySQL 密碼",               # ✅ 你的 MySQL 密碼
-        database="kana_library",       # ✅ 資料庫名稱
-        charset='utf8mb4'
-    )
-
-# ✅ LINE BOT 初始化
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler      = WebhookHandler(LINE_CHANNEL_SECRET)
-
 
 @app.route("/")
 def home():
@@ -66,10 +70,6 @@ def check_image():
         return jsonify({"correct": False, "error": "Missing image or answer"}), 400
 
     header, encoded = image_data.split(",", 1)
-    # 限制上傳大小，避免 OOM
-    if len(encoded) > 300000:
-        return jsonify({"correct": False, "error": "❌ Image too large"}), 400
-
     user_img_path = os.path.join(UPLOAD_FOLDER, "user_input.png")
     with open(user_img_path, "wb") as f:
         f.write(base64.b64decode(encoded))
@@ -215,85 +215,19 @@ def handle_msg(event):
         "ば", "び", "ぶ", "べ", "ぼ",
         "ぱ", "ぴ", "ぷ", "ぺ", "ぽ"
     ]:
-        conn = None
-        cursor = None
-        try:
-            conn = get_db_connection()
-            cursor = conn.cursor(dictionary=True)
-            cursor.execute("SELECT * FROM kana_items WHERE kana = %s", (text,))
-            row = cursor.fetchone()
-            if row:
-                flex = {
-                    "type": "bubble",
-                    "size": "mega",
-                    "body": {
-                        "type": "box",
-                        "layout": "vertical",
-                        "contents": [
-                            {
-                                "type": "text",
-                                "text": f"{row['kana']} - Stroke Order",
-                                "weight": "bold",
-                                "size": "xl",
-                                "margin": "md"
-                            },
-                            {
-                                "type": "image",
-                                "url": row["image_url"],
-                                "size": "full",
-                                "aspectMode": "fit",
-                                "margin": "md"
-                            },
-                            {
-                                "type": "text",
-                                "text": row["stroke_order_text"],
-                                "wrap": True,
-                                "margin": "md"
-                            },
-                            {
-                                "type": "button",
-                                "action": {
-                                    "type": "uri",
-                                    "label": "▶ 聽發音",
-                                    "uri": row["audio_url"]
-                                },
-                                "style": "primary",
-                                "margin": "md"
-                            },
-                            {
-                                "type": "button",
-                                "action": {
-                                    "type": "message",
-                                    "label": "↩ 返回清單",
-                                    "text": "Kana Table"
-                                },
-                                "style": "secondary",
-                                "color": "#AAAAAA",
-                                "margin": "md",
-                                "height": "sm"
-                            }
-                        ]
-                    }
-                }
-                line_bot_api.reply_message(
-                    event.reply_token,
-                    FlexSendMessage(alt_text=f"{row['kana']} 的筆順資料", contents=flex)
-                )
-            else:
-                line_bot_api.reply_message(
-                    event.reply_token,
-                    TextSendMessage("⚠️ 找不到資料，請確認是否有輸入正確假名。")
-                )
-        except Exception as e:
-            line_bot_api.reply_message(
-                event.reply_token,
-                TextSendMessage(f"❌ 發生錯誤：{str(e)}")
-            )
-        finally:
-            if cursor:
-                cursor.close()
-            if conn:
-                conn.close()
+        info = fetch_kana_info(text)
+        if info:
+            messages = [
+                TextSendMessage(text=f"📖 筆順說明：\n{info['stroke_order_text']}"),
+                ImageSendMessage(original_content_url=info['image_url'], preview_image_url=info['image_url']),
+                AudioSendMessage(original_content_url=info['audio_url'], duration=3000),
+            ]
+            line_bot_api.reply_message(event.reply_token, messages)
+        else:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage("❌ 無法找到該假名的資料"))
+
+    else:
+        line_bot_api.reply_message(event.reply_token, TextSendMessage("Type 'Start Practice' to begin ✍️"))
 
 @app.route("/callback", methods=["POST"])
 def callback():
