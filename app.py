@@ -29,6 +29,7 @@ def get_db_connection():
     return pymysql.connect(
         host="127.0.0.1",        # 如果是遠端請改為 IP
         user="root",
+        port=3306,
         password="",
         database="kana_library",
         charset="utf8mb4",
