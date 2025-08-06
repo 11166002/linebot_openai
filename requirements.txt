@@ -3,5 +3,4 @@ line-bot-sdk
 opencv-python
 scikit-image
 gunicorn
-mysql-connector-python
-pymysql
+psycopg2-binary
