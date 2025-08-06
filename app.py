@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify, render_template, abort
-import os, base64, cv2, pymysql
+import os, base64, cv2, psycopg2
 from skimage.metrics import structural_similarity as ssim
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
@@ -24,27 +24,35 @@ SAMPLE_FOLDER = os.path.join(BASE_DIR, "samples")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(SAMPLE_FOLDER, exist_ok=True)
 
-# ✅ 資料庫連線設定
+# ✅ PostgreSQL 資料庫連線設定（Render 資料庫資訊）
 def get_db_connection():
-    return pymysql.connect(
-        host="127.0.0.1",        # 如果是遠端請改為 IP
-        user="root",
-        port=3306,
-        password="",
-        database="kana_library",
-        charset="utf8mb4",
-        cursorclass=pymysql.cursors.DictCursor
+    return psycopg2.connect(
+        host="dpg-d29lgk2dbo4c73bmamsg-a.oregon-postgres.render.com",        # 例: dpg-xxxxxxx.render.com
+        port="5432",
+        database="japan_2tmc",        # 你建立的資料庫名稱
+        user="japan_2tmc_user",
+        password="wjEjoFXbdPA8WYTJTkg0mI5oR02ozdnI"
     )
 
+# ✅ 取得假名資料
 def fetch_kana_info(kana):
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT * FROM kana_items WHERE kana = %s", (kana,))
-            return cursor.fetchone()
+            cursor.execute("SELECT kana, image_url, stroke_order_text, audio_url FROM kana_items WHERE kana = %s", (kana,))
+            row = cursor.fetchone()
+            if row:
+                return {
+                    "kana": row[0],
+                    "image_url": row[1],
+                    "stroke_order_text": row[2],
+                    "audio_url": row[3]
+                }
+            return None
     finally:
         conn.close()
 
+# ✅ 影像比對
 def compare_images(user_img_path: str, correct_img_path: str) -> float:
     img1 = cv2.imread(user_img_path, cv2.IMREAD_GRAYSCALE)
     img2 = cv2.imread(correct_img_path, cv2.IMREAD_GRAYSCALE)
@@ -54,6 +62,7 @@ def compare_images(user_img_path: str, correct_img_path: str) -> float:
     score, _ = ssim(img1, img2, full=True)
     return score
 
+# LINE Bot 初始化
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler      = WebhookHandler(LINE_CHANNEL_SECRET)
 
