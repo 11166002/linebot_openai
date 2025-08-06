@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify, render_template, abort
 import os, base64, cv2, psycopg2
+from urllib.parse import quote
 from skimage.metrics import structural_similarity as ssim
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
@@ -24,6 +25,10 @@ SAMPLE_FOLDER = os.path.join(BASE_DIR, "samples")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(SAMPLE_FOLDER, exist_ok=True)
 
+# ✅ URL 編碼，確保 LINE API 能接受
+def safe_url(url: str) -> str:
+    return quote(url, safe=":/")
+
 # ✅ PostgreSQL 資料庫連線設定（Render 資料庫資訊）
 def get_db_connection():
     return psycopg2.connect(
@@ -44,9 +49,9 @@ def fetch_kana_info(kana):
             if row:
                 return {
                     "kana": row[0],
-                    "image_url": row[1],
+                    "image_url": safe_url(row[1]),
                     "stroke_order_text": row[2],
-                    "audio_url": row[3]
+                    "audio_url": safe_url(row[3])
                 }
             return None
     finally:
