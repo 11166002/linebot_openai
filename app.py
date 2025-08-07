@@ -231,15 +231,22 @@ def handle_msg(event):
         "ぱ", "ぴ", "ぷ", "ぺ", "ぽ"
     ]:
         info = fetch_kana_info(text)
-        if info:
-            messages = [
-                TextSendMessage(text=f"📖 Stroke order description：\n{info['stroke_order_text']}"),
-                ImageSendMessage(original_content_url=info['image_url'], preview_image_url=info['image_url']),
-                AudioSendMessage(original_content_url=info['audio_url'], duration=3000),
-            ]
-            line_bot_api.reply_message(event.reply_token, messages)
-        else:
-            line_bot_api.reply_message(event.reply_token, TextSendMessage("❌ Data for the kana could not be found."))
+import urllib.parse
+from linebot.models import TextSendMessage, ImageSendMessage, AudioSendMessage
+
+if info:
+    # 處理可能含有 %20、日文假名的 URL
+    encoded_image_url = urllib.parse.quote(info['image_url'], safe=':/')
+    encoded_audio_url = urllib.parse.quote(info['audio_url'], safe=':/')
+
+    messages = [
+        TextSendMessage(text=f"📖 Stroke order description：\n{info['stroke_order_text']}"),
+        ImageSendMessage(original_content_url=encoded_image_url, preview_image_url=encoded_image_url),
+        AudioSendMessage(original_content_url=encoded_audio_url, duration=3000),
+    ]
+    line_bot_api.reply_message(event.reply_token, messages)
+else:
+    line_bot_api.reply_message(event.reply_token, TextSendMessage("❌ Data for the kana could not be found."))
 
     else:
         line_bot_api.reply_message(event.reply_token, TextSendMessage("Type 'Start Practice' to begin ✍️"))
