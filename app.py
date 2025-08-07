@@ -235,7 +235,6 @@ import urllib.parse
 from linebot.models import TextSendMessage, ImageSendMessage, AudioSendMessage
 
 if info:
-    # 處理可能含有 %20、日文假名的 URL
     encoded_image_url = urllib.parse.quote(info['image_url'], safe=':/')
     encoded_audio_url = urllib.parse.quote(info['audio_url'], safe=':/')
 
@@ -245,11 +244,9 @@ if info:
         AudioSendMessage(original_content_url=encoded_audio_url, duration=3000),
     ]
     line_bot_api.reply_message(event.reply_token, messages)
+
 else:
     line_bot_api.reply_message(event.reply_token, TextSendMessage("❌ Data for the kana could not be found."))
-
-    else:
-        line_bot_api.reply_message(event.reply_token, TextSendMessage("Type 'Start Practice' to begin ✍️"))
 
 @app.route("/callback", methods=["POST"])
 def callback():
