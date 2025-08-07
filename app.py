@@ -39,59 +39,33 @@ def get_db_connection():
         password="wjEjoFXbdPA8WYTJTkg0mI5oR02ozdnI"
     )
 
-# ✅ URL 修正邏輯（轉 raw 並編碼）
-def fix_url(url):
-    if url.startswith("https://github.com/11166002/audio-files/blob/main/"):
-        url = url.replace(
-            "https://github.com/11166002/audio-files/blob/main/",
-            "https://raw.githubusercontent.com/11166002/audio-files/main/"
-        )
-    return quote(url, safe=":/")
-
-# ✅ 檢查圖片/音檔是否可讀取
-def is_valid_url(url):
-    try:
-        r = requests.get(url, timeout=5)
-        return r.status_code == 200 and 'image' in r.headers.get("Content-Type", "") or 'audio' in r.headers.get("Content-Type", "")
-    except:
-        return False
-
-# ✅ 路由：訪問這個網址會修正 image_url 與 audio_url 並檢查有效性
-@app.route("/fix_urls")
-def fix_urls():
+# ✅ 取得假名資料
+def fetch_kana_info(kana):
     conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, image_url, audio_url FROM kana_items")
-    rows = cursor.fetchall()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT kana, image_url, stroke_order_text, audio_url FROM kana_items WHERE kana = %s", (kana,))
+            row = cursor.fetchone()
+            if row:
+                return {
+                    "kana": row[0],
+                    "image_url": safe_url(row[1]),
+                    "stroke_order_text": row[2],
+                    "audio_url": safe_url(row[3])
+                }
+            return None
+    finally:
+        conn.close()
 
-    updated = 0
-    skipped = 0
-    for id_, img_url, aud_url in rows:
-        if not img_url and not aud_url:
-            continue
-
-        fixed_img = fix_url(img_url) if img_url else img_url
-        fixed_aud = fix_url(aud_url) if aud_url else aud_url
-
-        valid_img = is_valid_url(fixed_img) if fixed_img else True
-        valid_aud = is_valid_url(fixed_aud) if fixed_aud else True
-
-        if not valid_img or not valid_aud:
-            skipped += 1
-            continue
-
-        if fixed_img != img_url or fixed_aud != aud_url:
-            cursor.execute(
-                "UPDATE kana_items SET image_url = %s, audio_url = %s WHERE id = %s",
-                (fixed_img, fixed_aud, id_)
-            )
-            updated += 1
-
-    conn.commit()
-    cursor.close()
-    conn.close()
-
-    return f"✅ 修正完成，共更新 {updated} 筆，跳過無效連結 {skipped} 筆。"
+# ✅ 影像比對
+def compare_images(user_img_path: str, correct_img_path: str) -> float:
+    img1 = cv2.imread(user_img_path, cv2.IMREAD_GRAYSCALE)
+    img2 = cv2.imread(correct_img_path, cv2.IMREAD_GRAYSCALE)
+    if img1 is None or img2 is None:
+        raise FileNotFoundError("❌ Unable to load image (user or sample)")
+    img1, img2 = [cv2.resize(i, (200, 200)) for i in (img1, img2)]
+    score, _ = ssim(img1, img2, full=True)
+    return score
 
 # LINE Bot 初始化
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
