@@ -25,9 +25,12 @@ SAMPLE_FOLDER = os.path.join(BASE_DIR, "samples")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(SAMPLE_FOLDER, exist_ok=True)
 
-# ✅ URL 編碼，確保 LINE API 能接受（支援 %20 等空白）
+from urllib.parse import unquote, quote
+
 def safe_url(url: str) -> str:
-    return quote(url, safe=":/?=&")
+    # 解決雙重編碼或空格混合的情況
+    return quote(unquote(url), safe=":/?=&")
+
 
 # ✅ PostgreSQL 資料庫連線設定（Render 資料庫資訊）
 def get_db_connection():
