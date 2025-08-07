@@ -233,13 +233,13 @@ def handle_msg(event):
         info = fetch_kana_info(text)
         if info:
             messages = [
-                TextSendMessage(text=f"📖 筆順說明：\n{info['stroke_order_text']}"),
+                TextSendMessage(text=f"📖 Stroke order description：\n{info['stroke_order_text']}"),
                 ImageSendMessage(original_content_url=info['image_url'], preview_image_url=info['image_url']),
                 AudioSendMessage(original_content_url=info['audio_url'], duration=3000),
             ]
             line_bot_api.reply_message(event.reply_token, messages)
         else:
-            line_bot_api.reply_message(event.reply_token, TextSendMessage("❌ 無法找到該假名的資料"))
+            line_bot_api.reply_message(event.reply_token, TextSendMessage("❌ Data for the kana could not be found."))
 
     else:
         line_bot_api.reply_message(event.reply_token, TextSendMessage("Type 'Start Practice' to begin ✍️"))
