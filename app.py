@@ -183,6 +183,7 @@ def build_quiz_quick_reply(options):
     items.append(QuickReplyButton(action=MessageAction(label="Help", text="quiz help")))
     return QuickReply(items=items)
 
+
 def build_mode_quick_reply() -> QuickReply:
     """建立遊戲模式 Quick Reply（Casual/Timed/Survival）。"""
     return QuickReply(items=[
@@ -349,6 +350,7 @@ def present_quiz_messages(uid: str):
         ),
     ]
 
+
 # =============================
 # LINE Bot 初始化與路由
 # =============================
@@ -403,7 +405,7 @@ def handle_msg(event):
     - Row navigation: tap row text or 'row next' / 'row previous'
     - Kana navigation: tap kana or 'next/previous/repeat [kana]'
     - Random draw: 'random'
-    - Quiz: 'quiz start [category] [N]', 'quiz skip', 'quiz end', 'quiz help'
+    - Quiz: 'quiz start [mode?] [category?] [N]', 'quiz 50', 'quiz repeat', 'quiz skip', 'quiz end'
     """
     text = event.message.text.strip()
     uid  = get_user_id(event)
@@ -456,17 +458,6 @@ def handle_msg(event):
         mode = text.split()[-1].lower()  # casual|timed|survival
         cat = USER_STATE.get(uid, {}).get("category", "Seion")
         init_quiz(uid, cat, 5, mode)
-        next_quiz_question(uid)
-        msgs = present_quiz_messages(uid)
-        line_bot_api.reply_message(event.reply_token, msgs)
-        return
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage("Choose a mode:", quick_reply=build_mode_quick_reply()),
-        )
-        return
-        cat = USER_STATE.get(uid, {}).get("category", "Seion")
-        init_quiz(uid, cat, 5)
         next_quiz_question(uid)
         msgs = present_quiz_messages(uid)
         line_bot_api.reply_message(event.reply_token, msgs)
@@ -554,12 +545,13 @@ def handle_msg(event):
         return
 
     # === 測驗指令 ===
-    # quiz start [Seion|Dakuon|Handakuon] [N]
-    m_qstart = re.match(r"^quiz\s+start(?:\s+(Seion|Dakuon|Handakuon))?(?:\s+(\d+))?$", text, flags=re.IGNORECASE)
+    # quiz start [mode?] [Seion|Dakuon|Handakuon]? [N]?
+    m_qstart = re.match(r"^quiz\s+start(?:\s+(casual|timed|survival))?(?:\s+(Seion|Dakuon|Handakuon))?(?:\s+(\d+))?$", text, flags=re.IGNORECASE)
     if m_qstart and uid:
-        cat = m_qstart.group(1) or USER_STATE.get(uid, {}).get("category", "Seion")
-        num = int(m_qstart.group(2)) if m_qstart.group(2) else 5
-        init_quiz(uid, cat, num)
+        mode = (m_qstart.group(1) or "casual").lower()
+        cat = m_qstart.group(2) or USER_STATE.get(uid, {}).get("category", "Seion")
+        num = int(m_qstart.group(3)) if m_qstart.group(3) else 5
+        init_quiz(uid, cat, num, mode)
         next_quiz_question(uid)
         msgs = present_quiz_messages(uid)
         line_bot_api.reply_message(event.reply_token, msgs)
@@ -605,8 +597,18 @@ def handle_msg(event):
             line_bot_api.reply_message(event.reply_token, TextSendMessage("No quiz in progress."))
             return
         correct = s.get("current")
+        # Survival 模式跳題扣命
+        if s.get("mode") == "survival" and s.get("lives") is not None:
+            s["lives"] -= 1
+        s["streak"] = 0
         s["index"] += 1
         next_quiz_question(uid)
+        if s.get("mode") == "survival" and s.get("lives") is not None and s["lives"] <= 0:
+            total = len(s.get("questions", []))
+            score = s.get("score", 0)
+            USER_QUIZ.pop(uid, None)
+            line_bot_api.reply_message(event.reply_token, [TextSendMessage(text=f"Skipped. Answer: {correct}"), TextSendMessage(text=f"Game over! Score: {score}/{total}")])
+            return
         msgs = [TextSendMessage(text=f"Skipped. Answer: {correct}")]
         msgs += present_quiz_messages(uid)
         line_bot_api.reply_message(event.reply_token, msgs)
@@ -627,8 +629,11 @@ def handle_msg(event):
     if text.lower() == "quiz help":
         msg = (
             "🎯 Kana Quiz (audio → choices)\n"
+            "Modes: casual (score), timed (time limit), survival (3 lives).\n"
             "Commands:\n"
-            "• quiz start [Seion|Dakuon|Handakuon] [N] — start a quiz.\n"
+            "• quiz start [casual|timed|survival] [Seion|Dakuon|Handakuon] [N]\n"
+            "• quiz 50 — remove two wrong options.\n"
+            "• quiz repeat — replay the audio.\n"
             "• quiz skip — skip current question.\n"
             "• quiz end — end the quiz.\n"
             "Answer by tapping one of the kana options."
@@ -721,22 +726,14 @@ def handle_msg(event):
 
     # Help（加入測驗說明）
     if text.lower() == "help":
-        help_text = (
-            "📘 How to use
-"
-            "• Choose a category via 'Kana Table' → Seion/Dakuon/Handakuon.
-"
-            "• Pick a row to see kana buttons.
-"
-            "• Commands: next / previous / repeat [kana?], row next / row previous, random.
-"
-            "• Game in 'Kana Table' → choose mode (Casual / Timed / Survival).
-"
-            "• Quiz: quiz start [mode?] [category?] [N], quiz 50, quiz repeat, quiz skip, quiz end.
-"
-            "• If no kana is given after next/previous/repeat, the last viewed kana will be used.
-"
-        )
+        help_text = """📘 How to use
+• Choose a category via 'Kana Table' → Seion/Dakuon/Handakuon.
+• Pick a row to see kana buttons.
+• Commands: next / previous / repeat [kana?], row next / row previous, random.
+• Game in 'Kana Table' → choose mode (Casual / Timed / Survival).
+• Quiz: quiz start [mode?] [category?] [N], quiz 50, quiz repeat, quiz skip, quiz end.
+• If no kana is given after next/previous/repeat, the last viewed kana will be used.
+"""
         line_bot_api.reply_message(event.reply_token, TextSendMessage(help_text))
         return
 
