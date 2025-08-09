@@ -55,12 +55,12 @@ USER_STATE = {}
 # =============================
 
 def get_user_id(event) -> Optional[str]:
-    """Get LINE user_id; return None if unavailable."""
+    """取得 LINE user_id；若無法取得則回傳 None。"""
     return getattr(event.source, "user_id", None)
 
 
 def safe_url(url: str) -> str:
-    """Handle double-encoding and spaces for LINE asset URLs."""
+    """處理雙重編碼與空白，確保 LINE 可正確下載資源。"""
     return quote(unquote(url), safe=":/?=&")
 
 
@@ -123,7 +123,7 @@ def compare_images(user_img_path: str, correct_img_path: str) -> float:
 # =============================
 
 def category_of(kana: str) -> str:
-    """Return the category of a kana; default to 'Seion' if not found."""
+    """回傳該假名所屬類別；找不到則預設為 'Seion'。"""
     for cat, seq in KANA_SEQ.items():
         if kana in seq:
             return cat
@@ -131,7 +131,7 @@ def category_of(kana: str) -> str:
 
 
 def find_row_index_by_kana(cat: str, kana: str) -> int:
-    """Return the row index containing the kana within the category; 0 if not found."""
+    """在給定類別中找出包含此假名的列索引；找不到回傳 0。"""
     rows = KANA_ROWS.get(cat, [])
     for idx, row in enumerate(rows):
         if kana in row.split():
@@ -140,7 +140,7 @@ def find_row_index_by_kana(cat: str, kana: str) -> int:
 
 
 def step_kana(kana: str, step: int = 1) -> str:
-    """Within the same category, get the previous/next kana (circular)."""
+    """在同一類別內取得前/後一個假名（循環）。"""
     cat = category_of(kana)
     seq = KANA_SEQ[cat]
     i = seq.index(kana)
@@ -148,7 +148,7 @@ def step_kana(kana: str, step: int = 1) -> str:
 
 
 def step_row(cat: str, row_index: int, step: int = 1) -> int:
-    """Move to previous/next row within the category (circular)."""
+    """在類別內移動至上一列/下一列（循環）。"""
     rows = KANA_ROWS.get(cat, [])
     if not rows:
         return 0
@@ -160,7 +160,7 @@ def step_row(cat: str, row_index: int, step: int = 1) -> int:
 # =============================
 
 def quick_reply_for_kana(kana: str) -> QuickReply:
-    """Quick buttons when showing kana info (prev/repeat/next/row prev/row next/random)."""
+    """顯示單一假名資訊時的快捷按鈕（上一個/重播/下一個/列前/列後/隨機/返回）。"""
     return QuickReply(items=[
         QuickReplyButton(action=MessageAction(label="◀ Previous", text=f"previous {kana}")),
         QuickReplyButton(action=MessageAction(label="🔁 Repeat",   text=f"repeat {kana}")),
@@ -178,7 +178,7 @@ def quick_reply_for_kana(kana: str) -> QuickReply:
 # =============================
 
 def kana_flex(category: str = "Seion") -> dict:
-    """Build the category's row list as a Flex carousel; each row is a button."""
+    """以 Flex Carousel 呈現該類別的每一列；每列為一個按鈕。"""
     rows = KANA_ROWS.get(category, [])
     bubbles = []
     for row in rows:
@@ -202,7 +202,7 @@ def kana_flex(category: str = "Seion") -> dict:
 
 
 def generate_kana_buttons(row: str) -> dict:
-    """Build the kana buttons for the selected row (Flex carousel)."""
+    """針對所選的一整列，產生該列中每個假名的按鈕（Flex Carousel）。"""
     kana_list = row.strip().split()
     bubbles = []
     for kana in kana_list:
@@ -227,7 +227,7 @@ def generate_kana_buttons(row: str) -> dict:
 
 
 def kana_info_messages(kana: str):
-    """Compose messages for kana info (text + image + audio). Attach quick replies on the audio message."""
+    """組合單一假名的資訊（文字＋圖片＋音檔）；導航快捷鍵綁在音檔訊息上。"""
     info = fetch_kana_info(kana)
     if not info:
         return None
@@ -260,7 +260,7 @@ def home():
 
 @app.route("/check", methods=["POST"])
 def check_image():
-    """Compare canvas-uploaded handwriting with the sample using SSIM."""
+    """比較使用者手寫圖與範例圖的相似度（SSIM）。"""
     data = request.json or {}
     image_data = data.get("image")
     answer     = data.get("answer")
@@ -290,12 +290,12 @@ def check_image():
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_msg(event):
-    """Main command handler:
+    """主要指令處理：
     - Start Practice / Kana Table / Help
-    - Category switch: Seion / Dakuon / Handakuon
-    - Row navigation: tap row text or 'row next' / 'row previous'
-    - Kana navigation: tap kana or 'next/previous/repeat [kana]'
-    - Random draw: 'random'
+    - 類別切換：Seion / Dakuon / Handakuon
+    - 列導覽：點整列文字或輸入 'row next' / 'row previous'
+    - 假名導覽：點假名或輸入 'next/previous/repeat [kana]'
+    - 隨機抽題：'random'
     """
     text = event.message.text.strip()
     uid  = get_user_id(event)
@@ -310,20 +310,24 @@ def handle_msg(event):
         line_bot_api.reply_message(event.reply_token, TextSendMessage("Choose a function 👇", quick_reply=qr))
         return
 
-    # 入口：Kana Table
+    # 入口：Kana Table（改為按鈕樣板 ButtonsTemplate）
     if text == "Kana Table":
         # 預設先記錄類別為 Seion，列索引 0（便於之後 row next/previous）
         if uid:
             USER_STATE[uid] = {"category": "Seion", "row_index": 0, "last_kana": USER_STATE.get(uid, {}).get("last_kana")}
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(
-                "Please choose: Seion / Dakuon / Handakuon",
-                quick_reply=QuickReply(items=[
-                    QuickReplyButton(action=MessageAction(label="Seion", text="Seion")),
-                    QuickReplyButton(action=MessageAction(label="Dakuon", text="Dakuon")),
-                    QuickReplyButton(action=MessageAction(label="Handakuon", text="Handakuon")),
-                ]),
+            TemplateSendMessage(
+                alt_text="Select a category",
+                template=ButtonsTemplate(
+                    title="Kana Table",
+                    text="Please choose a category",
+                    actions=[
+                        MessageAction(label="Seion", text="Seion"),
+                        MessageAction(label="Dakuon", text="Dakuon"),
+                        MessageAction(label="Handakuon", text="Handakuon"),
+                    ],
+                ),
             ),
         )
         return
