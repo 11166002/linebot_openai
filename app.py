@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify, render_template, abort
-import os, base64, cv2, psycopg2, re, random
+import os, base64, cv2, psycopg2, re, random, time
 from urllib.parse import unquote, quote
 from skimage.metrics import structural_similarity as ssim
 from linebot import LineBotApi, WebhookHandler
@@ -174,12 +174,22 @@ def quick_reply_for_kana(kana: str) -> QuickReply:
 
 
 def build_quiz_quick_reply(options):
-    """建立測驗用 Quick Reply：四個選項 + Skip/End/Help。"""
+    """建立測驗用 Quick Reply：四個選項 + 50/50 + Repeat + Skip/End/Help。"""
     items = [QuickReplyButton(action=MessageAction(label=o, text=o)) for o in options]
+    items.append(QuickReplyButton(action=MessageAction(label="50/50", text="quiz 50")))
+    items.append(QuickReplyButton(action=MessageAction(label="Repeat 🔊", text="quiz repeat")))
     items.append(QuickReplyButton(action=MessageAction(label="Skip", text="quiz skip")))
     items.append(QuickReplyButton(action=MessageAction(label="End", text="quiz end")))
     items.append(QuickReplyButton(action=MessageAction(label="Help", text="quiz help")))
     return QuickReply(items=items)
+
+def build_mode_quick_reply() -> QuickReply:
+    """建立遊戲模式 Quick Reply（Casual/Timed/Survival）。"""
+    return QuickReply(items=[
+        QuickReplyButton(action=MessageAction(label="Casual", text="Game Casual")),
+        QuickReplyButton(action=MessageAction(label="Timed ⏱", text="Game Timed")),
+        QuickReplyButton(action=MessageAction(label="Survival ❤️", text="Game Survival")),
+    ])
 
 
 # =============================
@@ -255,8 +265,11 @@ def kana_info_messages(kana: str):
 # 快速測驗（音檔 → 選擇題）
 # =============================
 
-def init_quiz(uid: str, category: str = "Seion", num_questions: int = 5):
+def init_quiz(uid: str, category: str = "Seion", num_questions: int = 5, mode: str = "casual"):
     """初始化音檔選擇題測驗。"""
+    mode = (mode or "casual").lower()
+    if mode not in ("casual", "timed", "survival"):
+        mode = "casual"
     seq = list(KANA_SEQ.get(category, []))
     n = max(1, min(num_questions, len(seq)))
     questions = random.sample(seq, n)
@@ -268,6 +281,14 @@ def init_quiz(uid: str, category: str = "Seion", num_questions: int = 5):
         "current": None,
         "choices": [],
         "finished": False,
+        # 遊戲化
+        "mode": mode,            # casual | timed | survival
+        "lives": 3 if mode == "survival" else None,
+        "time_per_q": 12 if mode == "timed" else None,
+        "deadline_ts": None,     # 下一個截止時間（epoch 秒）
+        "streak": 0,
+        "best_streak": 0,
+        "used_5050": False,      # 當前題目是否已用 50/50
     }
 
 
@@ -286,6 +307,12 @@ def next_quiz_question(uid: str):
     choices = distractors + [target]
     random.shuffle(choices)
     s["choices"] = choices
+    # 計時模式：設定截止時間；重置 50/50 使用狀態
+    s["used_5050"] = False
+    if s.get("mode") == "timed" and s.get("time_per_q"):
+        s["deadline_ts"] = time.time() + int(s["time_per_q"])  # epoch seconds
+    else:
+        s["deadline_ts"] = None
     return target, choices
 
 
@@ -302,14 +329,25 @@ def present_quiz_messages(uid: str):
     info = fetch_kana_info(target)
     if not info:
         return [TextSendMessage(text="Quiz data missing. Try 'quiz start' again.")]
+
+    # 狀態列（模式 / 計時 / 生命 / 連擊）
+    status_bits = []
+    if s.get("mode") == "timed" and s.get("time_per_q"):
+        left = max(0, int(s.get("deadline_ts", 0) - time.time())) if s.get("deadline_ts") else s["time_per_q"]
+        status_bits.append(f"⏱ {left}s")
+    if s.get("mode") == "survival":
+        status_bits.append(f"❤️ {s.get('lives', 0)}")
+    if s.get("streak", 0) > 1:
+        status_bits.append(f"🔥 {s['streak']}")
+    status = "  ".join(status_bits)
+
     return [
         AudioSendMessage(original_content_url=info['audio_url'], duration=3000),
         TextSendMessage(
-            text=f"Q {idx}/{total}: Choose the correct kana",
+            text=(f"Q {idx}/{total}: Choose the correct kana" + (f"  |  {status}" if status else "")),
             quick_reply=build_quiz_quick_reply(s["choices"]),
         ),
     ]
-
 
 # =============================
 # LINE Bot 初始化與路由
@@ -399,11 +437,34 @@ def handle_msg(event):
         )
         return
 
-    # Kana Table 下的 Game：直接開始測驗（使用目前類別，預設 Seion）
+    # Kana Table 下的 Game：先選模式（Casual/Timed/Survival）
     if text == "Game":
         if not uid:
             line_bot_api.reply_message(event.reply_token, TextSendMessage("Quiz requires a user context."))
             return
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage("Choose a mode:", quick_reply=build_mode_quick_reply()),
+        )
+        return
+
+    # Game 模式選擇後立即開始
+    if text in ("Game Casual", "Game Timed", "Game Survival"):
+        if not uid:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage("Quiz requires a user context."))
+            return
+        mode = text.split()[-1].lower()  # casual|timed|survival
+        cat = USER_STATE.get(uid, {}).get("category", "Seion")
+        init_quiz(uid, cat, 5, mode)
+        next_quiz_question(uid)
+        msgs = present_quiz_messages(uid)
+        line_bot_api.reply_message(event.reply_token, msgs)
+        return
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage("Choose a mode:", quick_reply=build_mode_quick_reply()),
+        )
+        return
         cat = USER_STATE.get(uid, {}).get("category", "Seion")
         init_quiz(uid, cat, 5)
         next_quiz_question(uid)
@@ -504,6 +565,39 @@ def handle_msg(event):
         line_bot_api.reply_message(event.reply_token, msgs)
         return
 
+    # quiz 50（當前題目 50/50）
+    if text.lower() in ("quiz 50", "quiz fifty") and uid:
+        s = USER_QUIZ.get(uid)
+        if not s or s.get("finished") or not s.get("current"):
+            line_bot_api.reply_message(event.reply_token, TextSendMessage("No quiz in progress."))
+            return
+        if s.get("used_5050"):
+            line_bot_api.reply_message(event.reply_token, TextSendMessage("50/50 already used on this question."))
+            return
+        correct = s["current"]
+        wrongs = [c for c in s["choices"] if c != correct]
+        while len(s["choices"]) > 2 and wrongs:
+            removed = wrongs.pop()
+            if removed in s["choices"] and removed != correct:
+                s["choices"].remove(removed)
+        s["used_5050"] = True
+        msgs = present_quiz_messages(uid)
+        line_bot_api.reply_message(event.reply_token, [TextSendMessage(text="50/50 applied."), *msgs])
+        return
+
+    # quiz repeat（重播音檔）
+    if text.lower() == "quiz repeat" and uid:
+        s = USER_QUIZ.get(uid)
+        if not s or s.get("finished") or not s.get("current"):
+            line_bot_api.reply_message(event.reply_token, TextSendMessage("No quiz in progress."))
+            return
+        info = fetch_kana_info(s["current"])
+        if not info:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage("Audio unavailable."))
+            return
+        line_bot_api.reply_message(event.reply_token, [AudioSendMessage(original_content_url=info['audio_url'], duration=3000)])
+        return
+
     # quiz skip
     if text.lower() == "quiz skip" and uid:
         s = USER_QUIZ.get(uid)
@@ -546,15 +640,46 @@ def handle_msg(event):
     if uid and uid in USER_QUIZ:
         s = USER_QUIZ.get(uid)
         if s and not s.get("finished") and s.get("current") and s.get("choices"):
+            # 計時模式：超時直接判錯並進下一題
+            if s.get("mode") == "timed" and s.get("deadline_ts"):
+                if time.time() > s["deadline_ts"]:
+                    correct = s["current"]
+                    s["streak"] = 0
+                    s["index"] += 1
+                    next_quiz_question(uid)
+                    if s.get("finished"):
+                        total = len(s.get("questions", []))
+                        score = s.get("score", 0)
+                        USER_QUIZ.pop(uid, None)
+                        line_bot_api.reply_message(event.reply_token, [TextSendMessage(text="⏱ Time's up!"), TextSendMessage(text=f"Done! Score: {score}/{total}")])
+                    else:
+                        msgs = [TextSendMessage(text="⏱ Time's up!")]
+                        msgs += present_quiz_messages(uid)
+                        line_bot_api.reply_message(event.reply_token, msgs)
+                    return
+            # 作答
             if text in s["choices"]:
                 correct = s["current"]
                 if text == correct:
                     s["score"] += 1
-                    feedback = "✅ Correct!"
+                    s["streak"] += 1
+                    s["best_streak"] = max(s["best_streak"], s["streak"])
+                    feedback = "✅ Correct!" + (f" 🔥 x{s['streak']}" if s['streak'] > 1 else "")
                 else:
+                    # Survival 模式扣命
+                    if s.get("mode") == "survival" and s.get("lives") is not None:
+                        s["lives"] -= 1
+                    s["streak"] = 0
                     feedback = f"❌ Incorrect. Answer: {correct}"
                 s["index"] += 1
                 next_quiz_question(uid)
+                # Survival 死亡
+                if s.get("mode") == "survival" and s.get("lives") is not None and s["lives"] <= 0:
+                    total = len(s.get("questions", []))
+                    score = s.get("score", 0)
+                    USER_QUIZ.pop(uid, None)
+                    line_bot_api.reply_message(event.reply_token, [TextSendMessage(text=feedback), TextSendMessage(text=f"Game over! Score: {score}/{total}")])
+                    return
                 if s.get("finished"):
                     total = len(s.get("questions", []))
                     score = s.get("score", 0)
@@ -597,12 +722,20 @@ def handle_msg(event):
     # Help（加入測驗說明）
     if text.lower() == "help":
         help_text = (
-            "📘 How to use\n"
-            "• Choose a category via 'Kana Table' → Seion/Dakuon/Handakuon.\n"
-            "• Pick a row to see kana buttons.\n"
-            "• Commands: next / previous / repeat [kana?], row next / row previous, random.\n"
-            "• Quiz: quiz start [category] [N], quiz skip, quiz end.\n"
-            "• If no kana is given after next/previous/repeat, the last viewed kana will be used.\n"
+            "📘 How to use
+"
+            "• Choose a category via 'Kana Table' → Seion/Dakuon/Handakuon.
+"
+            "• Pick a row to see kana buttons.
+"
+            "• Commands: next / previous / repeat [kana?], row next / row previous, random.
+"
+            "• Game in 'Kana Table' → choose mode (Casual / Timed / Survival).
+"
+            "• Quiz: quiz start [mode?] [category?] [N], quiz 50, quiz repeat, quiz skip, quiz end.
+"
+            "• If no kana is given after next/previous/repeat, the last viewed kana will be used.
+"
         )
         line_bot_api.reply_message(event.reply_token, TextSendMessage(help_text))
         return
