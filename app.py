@@ -1,16 +1,16 @@
 from flask import Flask, request, jsonify, render_template, abort
-import os, base64, cv2, psycopg2
-from urllib.parse import quote
+import os, base64, cv2, psycopg2, re
+from urllib.parse import unquote, quote
 from skimage.metrics import structural_similarity as ssim
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import *
 
-# ── 🔑 Required ───────────────────────────
+# ── 🔑 Required (keep your real values in env vars in production) ──
 LINE_CHANNEL_ACCESS_TOKEN = "liqx01baPcbWbRF5if7oqBsZyf2+2L0eTOwvbIJ6f2Wec6is4sVd5onjl4fQAmc4n8EuqMfo7prlaG5la6kXb/y1gWOnk8ztwjjx2ZnukQbPJQeDwwcPEdFTOGOmQ1t88bQLvgQVczlzc/S9Q/6y5gdB04t89/1O/w1cDnyilFU="
 LINE_CHANNEL_SECRET       = "cd9fbd2ce22b12f243c5fcd2d97e5680"
 LIFF_URL                  = "https://liff.line.me/2007396139-Q0E29b2o"
-# ─────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -25,24 +25,48 @@ SAMPLE_FOLDER = os.path.join(BASE_DIR, "samples")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(SAMPLE_FOLDER, exist_ok=True)
 
-from urllib.parse import unquote, quote
+# =============================
+# Kana tables (single source of truth)
+# =============================
+KANA_ROWS = {
+    "Seion": [
+        "あ い う え お", "か き く け こ", "さ し す せ そ",
+        "た ち つ て と", "な に ぬ ね の", "は ひ ふ へ ほ",
+        "ま み む め も", "や ゆ よ", "ら り る れ ろ", "わ を ん",
+    ],
+    "Dakuon": [
+        "が ぎ ぐ げ ご", "ざ じ ず ぜ ぞ", "だ ぢ づ で ど", "ば び ぶ べ ぼ",
+    ],
+    "Handakuon": [
+        "ぱ ぴ ぷ ぺ ぽ",
+    ],
+}
+
+# Flattened sequences per category for stepping
+KANA_SEQ = {cat: [kana for row in rows for kana in row.split()] for cat, rows in KANA_ROWS.items()}
+ALL_KANA = set(k for seq in KANA_SEQ.values() for k in seq)
+
+# Track the last kana per user for NEXT / PREV / REPEAT without explicit kana
+LAST_KANA_BY_USER = {}
+
 
 def safe_url(url: str) -> str:
-    # 解決雙重編碼或空格混合的情況
+    """Fix double-encoding and spaces safely for LINE assets."""
     return quote(unquote(url), safe=":/?=&")
 
 
-# ✅ PostgreSQL 資料庫連線設定（Render 資料庫資訊）
+# ✅ PostgreSQL connection (Render example)
 def get_db_connection():
     return psycopg2.connect(
-        host="dpg-d29lgk2dbo4c73bmamsg-a.oregon-postgres.render.com",        # 例: dpg-xxxxxxx.render.com
+        host="dpg-d29lgk2dbo4c73bmamsg-a.oregon-postgres.render.com",
         port="5432",
-        database="japan_2tmc",        # 你建立的資料庫名稱
+        database="japan_2tmc",
         user="japan_2tmc_user",
-        password="wjEjoFXbdPA8WYTJTkg0mI5oR02ozdnI"
+        password="wjEjoFXbdPA8WYTJTkg0mI5oR02ozdnI",
     )
 
-# ✅ 取得假名資料
+
+# ✅ Fetch kana info from DB
 def fetch_kana_info(kana):
     conn = get_db_connection()
     try:
@@ -54,13 +78,14 @@ def fetch_kana_info(kana):
                     "kana": row[0],
                     "image_url": safe_url(row[1]),
                     "stroke_order_text": row[2],
-                    "audio_url": safe_url(row[3])
+                    "audio_url": safe_url(row[3]),
                 }
             return None
     finally:
         conn.close()
 
-# ✅ 影像比對
+
+# ✅ Image similarity (SSIM)
 def compare_images(user_img_path: str, correct_img_path: str) -> float:
     img1 = cv2.imread(user_img_path, cv2.IMREAD_GRAYSCALE)
     img2 = cv2.imread(correct_img_path, cv2.IMREAD_GRAYSCALE)
@@ -70,13 +95,16 @@ def compare_images(user_img_path: str, correct_img_path: str) -> float:
     score, _ = ssim(img1, img2, full=True)
     return score
 
-# LINE Bot 初始化
+
+# LINE Bot init
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler      = WebhookHandler(LINE_CHANNEL_SECRET)
+
 
 @app.route("/")
 def home():
     return render_template("index.html")
+
 
 @app.route("/check", methods=["POST"])
 def check_image():
@@ -101,29 +129,18 @@ def check_image():
         return jsonify({
             "correct": score > 0.6,
             "score"  : round(score, 3),
-            "message": "✅ Correct! Great job!" if score > 0.6 else "❌ Try again!"
+            "message": "✅ Correct! Great job!" if score > 0.6 else "❌ Try again!",
         })
     except Exception as e:
         return jsonify({"correct": False, "error": str(e)}), 500
 
-def kana_flex(category: str = "Seion") -> dict:
-    if category == "Seion":
-        rows = [
-            "あ い う え お", "か き く け こ", "さ し す せ そ",
-            "た ち つ て と", "な に ぬ ね の", "は ひ ふ へ ほ",
-            "ま み む め も", "や ゆ よ", "ら り る れ ろ", "わ を ん",
-        ]
-    elif category == "Dakuon":
-        rows = [
-            "が ぎ ぐ げ ご", "ざ じ ず ぜ ぞ", "だ ぢ づ で ど", "ば び ぶ べ ぼ",
-        ]
-    elif category == "Handakuon":
-        rows = [
-            "ぱ ぴ ぷ ぺ ぽ",
-        ]
-    else:
-        rows = []
 
+# =============================
+# Flex builders for Kana table
+# =============================
+
+def kana_flex(category: str = "Seion") -> dict:
+    rows = KANA_ROWS.get(category, [])
     bubbles = []
     for row in rows:
         bubble = {
@@ -137,17 +154,18 @@ def kana_flex(category: str = "Seion") -> dict:
                         "action": {
                             "type": "message",
                             "label": row.strip(),
-                            "text": row.strip()
+                            "text": row.strip(),
                         },
                         "style": "primary",
-                        "height": "sm"
+                        "height": "sm",
                     }
-                ]
-            }
+                ],
+            },
         }
         bubbles.append(bubble)
 
     return {"type": "carousel", "contents": bubbles}
+
 
 def generate_kana_buttons(row: str) -> dict:
     kana_list = row.strip().split()
@@ -165,21 +183,81 @@ def generate_kana_buttons(row: str) -> dict:
                         "action": {
                             "type": "message",
                             "label": kana,
-                            "text": kana
+                            "text": kana,
                         },
                         "style": "primary",
-                        "height": "sm"
+                        "height": "sm",
                     }
-                ]
-            }
+                ],
+            },
         }
         bubbles.append(bubble)
     return {"type": "carousel", "contents": bubbles}
+
+
+# =============================
+# Drill utilities: NEXT / PREV / REPEAT
+# =============================
+
+def category_of(kana: str) -> str:
+    for cat, seq in KANA_SEQ.items():
+        if kana in seq:
+            return cat
+    return "Seion"  # default fallback
+
+
+def step_kana(kana: str, step: int = 1) -> str:
+    cat = category_of(kana)
+    seq = KANA_SEQ[cat]
+    i = seq.index(kana)
+    return seq[(i + step) % len(seq)]
+
+
+def quick_reply_for(kana: str) -> QuickReply:
+    return QuickReply(items=[
+        QuickReplyButton(action=MessageAction(label="◀ Previous", text=f"previous {kana}")),
+        QuickReplyButton(action=MessageAction(label="🔁 Repeat", text=f"repeat {kana}")),
+        QuickReplyButton(action=MessageAction(label="Next ▶", text=f"next {kana}")),
+        QuickReplyButton(action=MessageAction(label="Kana Table", text="Kana Table")),
+        QuickReplyButton(action=MessageAction(label="Help", text="Help")),
+    ])
+
+
+def kana_info_messages(kana: str):
+    info = fetch_kana_info(kana)
+    if not info:
+        return None
+    messages = [
+        TextSendMessage(text=f"📖 Stroke order description:\n{info['stroke_order_text']}", quick_reply=quick_reply_for(kana)),
+        ImageSendMessage(original_content_url=info['image_url'], preview_image_url=info['image_url']),
+        AudioSendMessage(original_content_url=info['audio_url'], duration=3000),
+    ]
+    return messages
+
+
+def remember_user_kana(event, kana: str):
+    try:
+        uid = getattr(event.source, "user_id", None)
+        if uid:
+            LAST_KANA_BY_USER[uid] = kana
+    except Exception:
+        pass
+
+
+HELP_TEXT = (
+    "📘 How to use\n"
+    "• After you pick a kana from the Kana Table, quick buttons will appear: Previous / Repeat / Next.\n"
+    "• You can also type: 'next', 'previous', 'repeat'.\n"
+    "  If you don't add a kana after the command, I'll use the last kana you viewed.\n"
+    "• Supported formats: 'next あ', 'previous そ', 'repeat む'.\n"
+)
+
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_msg(event):
     text = event.message.text.strip()
 
+    # Start
     if text == "Start Practice":
         qr = QuickReply(items=[
             QuickReplyButton(action=URIAction(label="Open Canvas", uri=LIFF_URL)),
@@ -187,65 +265,87 @@ def handle_msg(event):
             QuickReplyButton(action=MessageAction(label="Help", text="Help")),
         ])
         line_bot_api.reply_message(event.reply_token, TextSendMessage("Choose a function 👇", quick_reply=qr))
+        return
 
-    elif text == "Kana Table":
+    # Kana Table entry
+    if text == "Kana Table":
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage("Please choose: Seion / Dakuon / Handakuon", quick_reply=QuickReply(items=[
-                QuickReplyButton(action=MessageAction(label="Seion", text="Seion")),
-                QuickReplyButton(action=MessageAction(label="Dakuon", text="Dakuon")),
-                QuickReplyButton(action=MessageAction(label="Handakuon", text="Handakuon")),
-            ])),
+            TextSendMessage(
+                "Please choose: Seion / Dakuon / Handakuon",
+                quick_reply=QuickReply(items=[
+                    QuickReplyButton(action=MessageAction(label="Seion", text="Seion")),
+                    QuickReplyButton(action=MessageAction(label="Dakuon", text="Dakuon")),
+                    QuickReplyButton(action=MessageAction(label="Handakuon", text="Handakuon")),
+                ]),
+            ),
         )
+        return
 
-    elif text in ("Seion", "Dakuon", "Handakuon"):
+    # Category chosen -> show rows carousel
+    if text in ("Seion", "Dakuon", "Handakuon"):
         line_bot_api.reply_message(
             event.reply_token,
-            FlexSendMessage(alt_text=f"Kana ({text})", contents=kana_flex(text))
+            FlexSendMessage(alt_text=f"Kana ({text})", contents=kana_flex(text)),
         )
+        return
 
-    elif text in [
-        "あ い う え お", "か き く け こ", "さ し す せ そ",
-        "た ち つ て と", "な に ぬ ね の", "は ひ ふ へ ほ",
-        "ま み む め も", "や ゆ よ", "ら り る れ ろ", "わ を ん",
-        "が ぎ ぐ げ ご", "ざ じ ず ぜ ぞ", "だ ぢ づ で ど", "ば び ぶ べ ぼ",
-        "ぱ ぴ ぷ ぺ ぽ"
-    ]:
+    # Row chosen -> show kana buttons
+    if text in [*KANA_ROWS["Seion"], *KANA_ROWS["Dakuon"], *KANA_ROWS["Handakuon"]]:
         line_bot_api.reply_message(
             event.reply_token,
-            FlexSendMessage(alt_text="Select a kana", contents=generate_kana_buttons(text))
+            FlexSendMessage(alt_text="Select a kana", contents=generate_kana_buttons(text)),
         )
+        return
 
-    elif text in [
-        "あ", "い", "う", "え", "お",
-        "か", "き", "く", "け", "こ",
-        "さ", "し", "す", "せ", "そ",
-        "た", "ち", "つ", "て", "と",
-        "な", "に", "ぬ", "ね", "の",
-        "は", "ひ", "ふ", "へ", "ほ",
-        "ま", "み", "む", "め", "も",
-        "や", "ゆ", "よ",
-        "ら", "り", "る", "れ", "ろ",
-        "わ", "を", "ん",
-        "が", "ぎ", "ぐ", "げ", "ご",
-        "ざ", "じ", "ず", "ぜ", "ぞ",
-        "だ", "ぢ", "づ", "で", "ど",
-        "ば", "び", "ぶ", "べ", "ぼ",
-        "ぱ", "ぴ", "ぷ", "ぺ", "ぽ"
-    ]:
-        info = fetch_kana_info(text)
-        if info:
-            messages = [
-                TextSendMessage(text=f"📖 Stroke order description：\n{info['stroke_order_text']}"),
-                ImageSendMessage(original_content_url=info['image_url'], preview_image_url=info['image_url']),
-                AudioSendMessage(original_content_url=info['audio_url'], duration=3000),
-            ]
+    # NEXT / PREV / REPEAT commands (English keywords)
+    m = re.match(r"^(next|previous|repeat)(?:\s+(.+))?$", text, flags=re.IGNORECASE)
+    if m:
+        action, maybe_kana = m.group(1).lower(), (m.group(2) or "").strip()
+        uid = getattr(event.source, "user_id", None)
+        current = None
+        if maybe_kana in ALL_KANA:
+            current = maybe_kana
+        elif uid and uid in LAST_KANA_BY_USER:
+            current = LAST_KANA_BY_USER[uid]
+
+        if not current:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage("Please select a kana first, or add a kana after the command, e.g., 'next あ'."))
+            return
+
+        if action == "repeat":
+            target = current
+        elif action == "next":
+            target = step_kana(current, +1)
+        else:  # previous
+            target = step_kana(current, -1)
+
+        messages = kana_info_messages(target)
+        if messages:
+            remember_user_kana(event, target)
             line_bot_api.reply_message(event.reply_token, messages)
         else:
             line_bot_api.reply_message(event.reply_token, TextSendMessage("❌ Data for the kana could not be found."))
+        return
 
-    else:
-        line_bot_api.reply_message(event.reply_token, TextSendMessage("Type 'Start Practice' to begin ✍️"))
+    # Single kana selected -> show info with quick replies
+    if text in ALL_KANA:
+        messages = kana_info_messages(text)
+        if messages:
+            remember_user_kana(event, text)
+            line_bot_api.reply_message(event.reply_token, messages)
+        else:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage("❌ Data for the kana could not be found."))
+        return
+
+    # Help
+    if text.lower() == "help":
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(HELP_TEXT))
+        return
+
+    # Fallback
+    line_bot_api.reply_message(event.reply_token, TextSendMessage("Type 'Start Practice' to begin ✍️"))
+
 
 @app.route("/callback", methods=["POST"])
 def callback():
