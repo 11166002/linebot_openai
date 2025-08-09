@@ -247,7 +247,7 @@ def generate_kana_buttons(row: str) -> dict:
 
 
 def kana_info_messages(kana: str):
-    """Compose messages for kana info (text + image + audio). Attach quick replies on the audio message (no 'Navigation' text)."""
+    """Compose messages for kana info (text + image + audio). Attach quick replies on the audio message."""
     info = fetch_kana_info(kana)
     if not info:
         return None
@@ -470,8 +470,28 @@ def handle_msg(event):
                     QuickReplyButton(action=MessageAction(label="Seion", text="Seion")),
                     QuickReplyButton(action=MessageAction(label="Dakuon", text="Dakuon")),
                     QuickReplyButton(action=MessageAction(label="Handakuon", text="Handakuon")),
+                    QuickReplyButton(action=MessageAction(label="Game", text="Game")),
                 ]),
             ),
+        )
+        return
+
+    # Start memory game from Kana Table menu
+    if text == "Game":
+        if not uid:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage("Game requires a user context."))
+            return
+        cat = USER_STATE.get(uid, {}).get("category", "Seion")
+        init_memory_game(uid, cat, 5)
+        board = render_memory_board(uid)
+        status = game_status_text(uid)
+        line_bot_api.reply_message(
+            event.reply_token,
+            [
+                TextSendMessage(text=f"Memory game started. Category: {cat}."),
+                FlexSendMessage(alt_text="Memory Game", contents=board),
+                TextSendMessage(text=status, quick_reply=quick_reply_for_game()),
+            ],
         )
         return
 
