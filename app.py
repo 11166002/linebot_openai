@@ -177,6 +177,32 @@ def quick_reply_for_kana(kana: str) -> QuickReply:
 # 訊息建構（假名表）
 # =============================
 
+def category_menu_flex() -> dict:
+    """以 Flex 製作酷炫分類選單（非 Template / 非 QuickReply）。"""
+    return {
+        "type": "bubble",
+        "body": {
+            "type": "box",
+            "layout": "vertical",
+            "spacing": "md",
+            "contents": [
+                {"type": "text", "text": "Kana Table", "weight": "bold", "size": "xl"},
+                {"type": "text", "text": "Please choose a category", "size": "sm", "color": "#888888"},
+                {
+                    "type": "box",
+                    "layout": "vertical",
+                    "spacing": "sm",
+                    "margin": "md",
+                    "contents": [
+                        {"type": "button", "style": "primary", "height": "sm", "action": {"type": "message", "label": "Seion", "text": "Seion"}},
+                        {"type": "button", "style": "primary", "height": "sm", "action": {"type": "message", "label": "Dakuon", "text": "Dakuon"}},
+                        {"type": "button", "style": "secondary", "height": "sm", "action": {"type": "message", "label": "Handakuon", "text": "Handakuon"}},
+                    ],
+                },
+            ],
+        },
+    }
+
 def kana_flex(category: str = "Seion") -> dict:
     """以 Flex Carousel 呈現該類別的每一列；每列為一個按鈕。"""
     rows = KANA_ROWS.get(category, [])
@@ -310,25 +336,14 @@ def handle_msg(event):
         line_bot_api.reply_message(event.reply_token, TextSendMessage("Choose a function 👇", quick_reply=qr))
         return
 
-    # 入口：Kana Table（改為按鈕樣板 ButtonsTemplate）
+    # 入口：Kana Table（改為 Flex 類按鈕：category_menu_flex）
     if text == "Kana Table":
         # 預設先記錄類別為 Seion，列索引 0（便於之後 row next/previous）
         if uid:
             USER_STATE[uid] = {"category": "Seion", "row_index": 0, "last_kana": USER_STATE.get(uid, {}).get("last_kana")}
         line_bot_api.reply_message(
             event.reply_token,
-            TemplateSendMessage(
-                alt_text="Select a category",
-                template=ButtonsTemplate(
-                    title="Kana Table",
-                    text="Please choose a category",
-                    actions=[
-                        MessageAction(label="Seion", text="Seion"),
-                        MessageAction(label="Dakuon", text="Dakuon"),
-                        MessageAction(label="Handakuon", text="Handakuon"),
-                    ],
-                ),
-            ),
+            FlexSendMessage(alt_text="Select a category", contents=category_menu_flex()),
         )
         return
 
