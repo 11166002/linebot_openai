@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, abort
+from flask import Flask, request, jsonify, render_template, abort, Response
 import os, base64, cv2, psycopg2, re, random
 from urllib.parse import unquote, quote
 from skimage.metrics import structural_similarity as ssim
@@ -49,6 +49,17 @@ def ensure_category_menu_image():
     cv2.imwrite(img_path, canvas)
 
 ensure_category_menu_image()
+
+# 提供 Imagemap 需求的 baseUrl/尺寸路徑（/im/kana_menu/1040）
+@app.route("/im/kana_menu/<int:size>")
+def serve_imagemap_kana_menu(size: int):
+    """回傳 Imagemap 圖檔（忽略 size，固定回傳 1040x1040 PNG）。"""
+    img_path = os.path.join(UPLOAD_FOLDER, "kana_menu.png")
+    if not os.path.exists(img_path):
+        ensure_category_menu_image()
+    with open(img_path, "rb") as f:
+        data = f.read()
+    return Response(data, mimetype="image/png")
 
 # =============================
 # 假名表（單一來源）
@@ -354,7 +365,7 @@ def handle_msg(event):
         if uid:
             USER_STATE[uid] = {"category": "Seion", "row_index": 0, "last_kana": USER_STATE.get(uid, {}).get("last_kana")}
         # 建構圖片連結（LINE 必須能從外部取用）
-        base_url = safe_url(request.host_url.rstrip('/') + '/static/kana_menu.png')
+        base_url = safe_url(request.host_url.rstrip('/') + '/im/kana_menu')
         line_bot_api.reply_message(
             event.reply_token,
             category_menu_imagemap(base_url),
