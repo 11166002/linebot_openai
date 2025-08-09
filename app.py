@@ -68,18 +68,25 @@ def safe_url(url: str) -> str:
 
 # ✅ PostgreSQL 連線（Render 範例）
 def get_db_connection():
+    # Render 通常需要 SSL，加入 sslmode='require' 以避免連線被拒
     return psycopg2.connect(
         host="dpg-d29lgk2dbo4c73bmamsg-a.oregon-postgres.render.com",
         port="5432",
         database="japan_2tmc",
         user="japan_2tmc_user",
         password="wjEjoFXbdPA8WYTJTkg0mI5oR02ozdnI",
+        sslmode="require",
+        connect_timeout=10,
     )
 
 
 # ✅ 由資料庫撈取假名資訊
 def fetch_kana_info(kana):
-    conn = get_db_connection()
+    # 連線失敗時避免整個流程炸掉，直接回 None
+    try:
+        conn = get_db_connection()
+    except Exception:
+        return None
     try:
         with conn.cursor() as cursor:
             cursor.execute(
@@ -97,6 +104,7 @@ def fetch_kana_info(kana):
             return None
     finally:
         conn.close()
+
 
 
 # ✅ 影像相似度（SSIM）
@@ -239,20 +247,15 @@ def generate_kana_buttons(row: str) -> dict:
 
 
 def kana_info_messages(kana: str):
-    """Compose messages for kana info (text + image + audio) and then attach row quick replies at the end."""
+    """Compose messages for kana info (text + image + audio). Attach quick replies on the audio message (no 'Navigation' text)."""
     info = fetch_kana_info(kana)
     if not info:
         return None
     return [
-        TextSendMessage(
-            text=f"📖 Stroke order description:\n{info['stroke_order_text']}"
-        ),
+        TextSendMessage(text=f"📖 Stroke order description:
+{info['stroke_order_text']}"),
         ImageSendMessage(original_content_url=info['image_url'], preview_image_url=info['image_url']),
-        AudioSendMessage(original_content_url=info['audio_url'], duration=3000),
-        TextSendMessage(
-            text="Navigation",
-            quick_reply=quick_reply_for_row(),
-        ),
+        AudioSendMessage(original_content_url=info['audio_url'], duration=3000, quick_reply=quick_reply_for_kana(kana)),
     ]
 
 
@@ -283,6 +286,20 @@ def init_memory_game(uid: str, category: str = "Seion", pairs: int = 5):
 def render_memory_board(uid: str) -> dict:
     """將目前遊戲狀態渲染為 Flex Carousel 棋盤。"""
     state = USER_GAME.get(uid)
+    if not state:
+        # 沒有遊戲狀態時避免 KeyError，給一個空棋盤提示
+        bubble = {
+            "type": "bubble",
+            "size": "micro",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {"type": "text", "text": "No game", "wrap": True}
+                ],
+            },
+        }
+        return {"type": "carousel", "contents": [bubble]}
     deck = state["deck"]
     bubbles = []
     for i, val in enumerate(deck):
@@ -315,7 +332,9 @@ def game_status_text(uid: str) -> str:
     return f"Pairs: {s.get('matches',0)}/{total_pairs} | Moves: {s.get('moves',0)}"
 
 
-def handle_flip(uid: str, index1based: int) -> (str, bool):
+from typing import Tuple
+
+def handle_flip(uid: str, index1based: int) -> Tuple[str, bool]:
     """處理翻牌邏輯，回傳（訊息, 是否結束）。"""
     state = USER_GAME.get(uid)
     if not state:
@@ -376,7 +395,12 @@ handler      = WebhookHandler(LINE_CHANNEL_SECRET)
 
 @app.route("/")
 def home():
-    return render_template("index.html")
+    # 若沒有 templates/index.html，回傳簡單訊息避免 TemplateNotFound
+    index_path = os.path.join(BASE_DIR, "templates", "index.html")
+    if os.path.exists(index_path):
+        return render_template("index.html")
+    return "OK"
+
 
 
 @app.route("/check", methods=["POST"])
@@ -427,6 +451,7 @@ def handle_msg(event):
         qr = QuickReply(items=[
             QuickReplyButton(action=URIAction(label="Open Canvas", uri=LIFF_URL)),
             QuickReplyButton(action=MessageAction(label="Kana Table", text="Kana Table")),
+            QuickReplyButton(action=MessageAction(label="Game", text="game start")),
             QuickReplyButton(action=MessageAction(label="Help", text="Help")),
         ])
         line_bot_api.reply_message(event.reply_token, TextSendMessage("Choose a function 👇", quick_reply=qr))
@@ -456,16 +481,12 @@ def handle_msg(event):
             USER_STATE[uid] = {"category": text, "row_index": 0, "last_kana": USER_STATE.get(uid, {}).get("last_kana")}
         line_bot_api.reply_message(
             event.reply_token,
-            [
-                FlexSendMessage(alt_text=f"Kana ({text})", contents=kana_flex(text)),
-                TextSendMessage("Pick a row or use row navigation.", quick_reply=quick_reply_for_row()),
-            ],
+            FlexSendMessage(alt_text=f"Kana ({text})", contents=kana_flex(text)),
         )
         return
 
     # 若點了某一整列（字串完全比對）
     if text in [*KANA_ROWS["Seion"], *KANA_ROWS["Dakuon"], *KANA_ROWS["Handakuon"]]:
-        # 盡量推斷並紀錄目前類別與列索引
         for cat, rows in KANA_ROWS.items():
             if text in rows:
                 row_idx = rows.index(text)
@@ -476,10 +497,7 @@ def handle_msg(event):
                 break
         line_bot_api.reply_message(
             event.reply_token,
-            [
-                FlexSendMessage(alt_text="Select a kana", contents=generate_kana_buttons(text)),
-                TextSendMessage("Pick a kana in this row.", quick_reply=quick_reply_for_row()),
-            ],
+            FlexSendMessage(alt_text="Select a kana", contents=generate_kana_buttons(text)),
         )
         return
 
@@ -491,18 +509,13 @@ def handle_msg(event):
         cat = state.get("category", "Seion")
         row_index = state.get("row_index", 0)
         row_index = step_row(cat, row_index, +1 if direction == "next" else -1)
-        # 更新狀態
         if uid:
             state.update({"row_index": row_index})
             USER_STATE[uid] = state
-        # 顯示新列
         row_text = KANA_ROWS[cat][row_index]
         line_bot_api.reply_message(
             event.reply_token,
-            [
-                FlexSendMessage(alt_text=f"{cat} row", contents=generate_kana_buttons(row_text)),
-                TextSendMessage(f"{cat} - Row {row_index + 1}", quick_reply=quick_reply_for_row()),
-            ],
+            FlexSendMessage(alt_text=f"{cat} row", contents=generate_kana_buttons(row_text)),
         )
         return
 
