@@ -252,11 +252,14 @@ def kana_info_messages(kana: str):
     if not info:
         return None
     return [
-        TextSendMessage(text=f"📖 Stroke order description:
-{info['stroke_order_text']}")
-        ,
+        TextSendMessage(text=f"""📖 Stroke order description:
+{info['stroke_order_text']}"""),
         ImageSendMessage(original_content_url=info['image_url'], preview_image_url=info['image_url']),
-        AudioSendMessage(original_content_url=info['audio_url'], duration=3000, quick_reply=quick_reply_for_kana(kana)),
+        AudioSendMessage(
+            original_content_url=info['audio_url'],
+            duration=3000,
+            quick_reply=quick_reply_for_kana(kana)
+        ),
     ]
 
 
