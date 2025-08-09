@@ -1,0 +1,179 @@
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+import matplotlib.pyplot as plt
+
+TRAIN_DIR = "dataset/train"
+VAL_DIR   = "dataset/val"
+TEST_DIR  = "dataset/test"
+
+KANA_46 = [
+    "あ","い","う","え","お",
+    "か","き","く","け","こ",
+    "さ","し","す","せ","そ",
+    "た","ち","つ","て","と",
+    "な","に","ぬ","ね","の",
+    "は","ひ","ふ","へ","ほ",
+    "ま","み","む","め","も",
+    "や","ゆ","よ",
+    "ら","り","る","れ","ろ",
+    "わ","を","ん"
+]
+
+IMG_SIZE = 64     
+BATCH    = 64
+EPOCHS   = 25
+SEED     = 42
+
+train_ds = tf.keras.utils.image_dataset_from_directory(
+    TRAIN_DIR,
+    labels='inferred',
+    class_names=KANA_46,
+    color_mode='grayscale',
+    image_size=(IMG_SIZE, IMG_SIZE),
+    batch_size=BATCH,
+    shuffle=True,
+    seed=SEED
+)
+
+val_ds = tf.keras.utils.image_dataset_from_directory(
+    VAL_DIR,
+    labels='inferred',
+    class_names=KANA_46,
+    color_mode='grayscale',
+    image_size=(IMG_SIZE, IMG_SIZE),
+    batch_size=BATCH,
+    shuffle=False
+)
+
+test_ds = tf.keras.utils.image_dataset_from_directory(
+    TEST_DIR,
+    labels='inferred',
+    class_names=KANA_46,
+    color_mode='grayscale',
+    image_size=(IMG_SIZE, IMG_SIZE),
+    batch_size=BATCH,
+    shuffle=False
+)
+
+AUTOTUNE = tf.data.AUTOTUNE
+
+normalizer = layers.Rescaling(1./255)
+
+augmenter = keras.Sequential([
+    layers.RandomRotation(0.08),
+    layers.RandomTranslation(0.05, 0.05),
+    layers.RandomZoom(0.08),
+])
+
+def preprocess_train(x, y):
+    x = normalizer(x)
+    x = augmenter(x, training=True)
+    return x, y
+
+def preprocess_eval(x, y):
+    x = normalizer(x)
+    return x, y
+
+train_ds = train_ds.map(preprocess_train, num_parallel_calls=AUTOTUNE)
+val_ds   = val_ds.map(preprocess_eval,   num_parallel_calls=AUTOTUNE)
+test_ds  = test_ds.map(preprocess_eval,  num_parallel_calls=AUTOTUNE)
+
+train_ds = train_ds.cache().prefetch(AUTOTUNE)
+val_ds   = val_ds.cache().prefetch(AUTOTUNE)
+test_ds  = test_ds.cache().prefetch(AUTOTUNE)
+
+model = keras.Sequential([
+    layers.Conv2D(32, 3, activation='relu', input_shape=(IMG_SIZE, IMG_SIZE, 1)),
+    layers.BatchNormalization(),
+    layers.Conv2D(32, 3, activation='relu'),
+    layers.MaxPooling2D(),
+    layers.Dropout(0.25),
+
+    layers.Conv2D(64, 3, activation='relu'),
+    layers.BatchNormalization(),
+    layers.Conv2D(64, 3, activation='relu'),
+    layers.MaxPooling2D(),
+    layers.Dropout(0.25),
+
+    layers.Conv2D(128, 3, activation='relu'),
+    layers.BatchNormalization(),
+    layers.MaxPooling2D(),
+    layers.Dropout(0.25),
+
+    layers.Flatten(),
+    layers.Dense(256, activation='relu'),
+    layers.Dropout(0.5),
+    layers.Dense(len(KANA_46), activation='softmax')  # 46 類
+])
+
+model.compile(
+    optimizer=keras.optimizers.Adam(1e-3),
+    loss='sparse_categorical_crossentropy',  # image_dataset 給的是 int label
+    metrics=['accuracy']
+)
+
+model.summary()
+
+callbacks = [
+    keras.callbacks.EarlyStopping(
+        monitor='val_accuracy',
+        patience=5,
+        restore_best_weights=True
+    ),
+    keras.callbacks.ModelCheckpoint(
+        filepath='best_kana_cnn.keras',
+        monitor='val_accuracy',
+        save_best_only=True
+    ),
+    keras.callbacks.ReduceLROnPlateau(
+        monitor='val_loss',
+        factor=0.5,
+        patience=2,
+        min_lr=1e-5
+    )
+]
+
+history = model.fit(
+    train_ds,
+    validation_data=val_ds,
+    epochs=EPOCHS,
+    callbacks=callbacks,
+    verbose=1
+)
+
+test_loss, test_acc = model.evaluate(test_ds, verbose=0)
+print(f"[TEST] loss={test_loss:.4f}, acc={test_acc:.4f}")
+
+plt.figure()
+plt.plot(history.history['loss'], label='train')
+plt.plot(history.history['val_loss'], label='val')
+plt.title('Loss'); plt.xlabel('Epoch'); plt.ylabel('Loss'); plt.legend()
+plt.show()
+
+plt.figure()
+plt.plot(history.history['accuracy'], label='train')
+plt.plot(history.history['val_accuracy'], label='val')
+plt.title('Accuracy'); plt.xlabel('Epoch'); plt.ylabel('Accuracy'); plt.legend()
+plt.show()
+
+for images, labels in test_ds.take(1):
+    preds = model.predict(images)
+    top1 = tf.argmax(preds, axis=1)
+
+    n_show = min(8, images.shape[0])
+    plt.figure(figsize=(12, 3))
+    for i in range(n_show):
+        plt.subplot(1, n_show, i+1)
+        img = images[i].numpy().squeeze()  
+        plt.imshow(img, cmap='gray')
+        plt.axis('off')
+        t = KANA_46[top1[i].numpy()]
+        g = KANA_46[labels[i].numpy()]
+        plt.title(f"pred:{t}\ntrue:{g}")
+    plt.tight_layout()
+    plt.show()
+    break
+
+model.save("kana_cnn_final.keras")
+print("Model saved to kana_cnn_final.keras (best weights also in best_kana_cnn.keras)")
