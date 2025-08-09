@@ -1,23 +1,23 @@
 from flask import Flask, request, jsonify, render_template, abort
-import os, base64, cv2, psycopg2, re
+import os, base64, cv2, psycopg2, re, random
 from urllib.parse import unquote, quote
 from skimage.metrics import structural_similarity as ssim
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import *
 
-# ── 🔑 Required (keep your real values in env vars in production) ──
+# ── 🔑 Required (production 建議用環境變數) ──
 LINE_CHANNEL_ACCESS_TOKEN = "liqx01baPcbWbRF5if7oqBsZyf2+2L0eTOwvbIJ6f2Wec6is4sVd5onjl4fQAmc4n8EuqMfo7prlaG5la6kXb/y1gWOnk8ztwjjx2ZnukQbPJQeDwwcPEdFTOGOmQ1t88bQLvgQVczlzc/S9Q/6y5gdB04t89/1O/w1cDnyilFU="
 LINE_CHANNEL_SECRET       = "cd9fbd2ce22b12f243c5fcd2d97e5680"
 LIFF_URL                  = "https://liff.line.me/2007396139-Q0E29b2o"
-# ─────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 app = Flask(
     __name__,
     template_folder=os.path.join(BASE_DIR, "templates"),
-    static_folder=os.path.join(BASE_DIR, "static")
+    static_folder=os.path.join(BASE_DIR, "static"),
 )
 
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "static")
@@ -26,7 +26,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(SAMPLE_FOLDER, exist_ok=True)
 
 # =============================
-# Kana tables (single source of truth)
+# 假名表（單一來源）
 # =============================
 KANA_ROWS = {
     "Seion": [
@@ -42,20 +42,28 @@ KANA_ROWS = {
     ],
 }
 
-# Flattened sequences per category for stepping
+# 將每個類別攤平成序列，用於上一個/下一個定位
 KANA_SEQ = {cat: [kana for row in rows for kana in row.split()] for cat, rows in KANA_ROWS.items()}
 ALL_KANA = set(k for seq in KANA_SEQ.values() for k in seq)
 
-# Track the last kana per user for NEXT / PREV / REPEAT without explicit kana
-LAST_KANA_BY_USER = {}
+# 使用者狀態（記錄最後一次的假名/分類/列索引）
+USER_STATE = {}
+
+# =============================
+# 工具函式
+# =============================
+
+def get_user_id(event) -> str:
+    """取得 LINE user_id（無法取得則回傳 None）。"""
+    return getattr(event.source, "user_id", None)
 
 
 def safe_url(url: str) -> str:
-    """Fix double-encoding and spaces safely for LINE assets."""
+    """處理雙重編碼與空白，以符合 LINE 圖片/音檔 URL 要求。"""
     return quote(unquote(url), safe=":/?=&")
 
 
-# ✅ PostgreSQL connection (Render example)
+# ✅ PostgreSQL 連線（Render 範例）
 def get_db_connection():
     return psycopg2.connect(
         host="dpg-d29lgk2dbo4c73bmamsg-a.oregon-postgres.render.com",
@@ -66,12 +74,15 @@ def get_db_connection():
     )
 
 
-# ✅ Fetch kana info from DB
+# ✅ 由資料庫撈取假名資訊
 def fetch_kana_info(kana):
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT kana, image_url, stroke_order_text, audio_url FROM kana_items WHERE kana = %s", (kana,))
+            cursor.execute(
+                "SELECT kana, image_url, stroke_order_text, audio_url FROM kana_items WHERE kana = %s",
+                (kana,),
+            )
             row = cursor.fetchone()
             if row:
                 return {
@@ -85,7 +96,7 @@ def fetch_kana_info(kana):
         conn.close()
 
 
-# ✅ Image similarity (SSIM)
+# ✅ 影像相似度（SSIM）
 def compare_images(user_img_path: str, correct_img_path: str) -> float:
     img1 = cv2.imread(user_img_path, cv2.IMREAD_GRAYSCALE)
     img2 = cv2.imread(correct_img_path, cv2.IMREAD_GRAYSCALE)
@@ -96,7 +107,143 @@ def compare_images(user_img_path: str, correct_img_path: str) -> float:
     return score
 
 
-# LINE Bot init
+# =============================
+# 類別/列/索引定位
+# =============================
+
+def category_of(kana: str) -> str:
+    """依假名找出其所屬類別，找不到則預設為 Seion。"""
+    for cat, seq in KANA_SEQ.items():
+        if kana in seq:
+            return cat
+    return "Seion"
+
+
+def find_row_index_by_kana(cat: str, kana: str) -> int:
+    """在指定類別中，回傳包含該假名的列索引（找不到回傳 0）。"""
+    rows = KANA_ROWS.get(cat, [])
+    for idx, row in enumerate(rows):
+        if kana in row.split():
+            return idx
+    return 0
+
+
+def step_kana(kana: str, step: int = 1) -> str:
+    """同類別內，取得前/後一個假名（循環）。"""
+    cat = category_of(kana)
+    seq = KANA_SEQ[cat]
+    i = seq.index(kana)
+    return seq[(i + step) % len(seq)]
+
+
+def step_row(cat: str, row_index: int, step: int = 1) -> int:
+    """在類別內移動到前/後一列（循環）。"""
+    rows = KANA_ROWS.get(cat, [])
+    if not rows:
+        return 0
+    return (row_index + step) % len(rows)
+
+
+# =============================
+# Quick Reply 建構
+# =============================
+
+def quick_reply_for_kana(kana: str) -> QuickReply:
+    """顯示假名資訊時的快速按鈕（上一個/重複/下一個/上一列/下一列/隨機）。"""
+    return QuickReply(items=[
+        QuickReplyButton(action=MessageAction(label="◀ Previous", text=f"previous {kana}")),
+        QuickReplyButton(action=MessageAction(label="🔁 Repeat",   text=f"repeat {kana}")),
+        QuickReplyButton(action=MessageAction(label="Next ▶",     text=f"next {kana}")),
+        QuickReplyButton(action=MessageAction(label="Row ◀",      text="row previous")),
+        QuickReplyButton(action=MessageAction(label="Row ▶",      text="row next")),
+        QuickReplyButton(action=MessageAction(label="Random",      text="random")),
+        QuickReplyButton(action=MessageAction(label="Kana Table",  text="Kana Table")),
+        QuickReplyButton(action=MessageAction(label="Help",        text="Help")),
+    ])
+
+
+def quick_reply_for_row() -> QuickReply:
+    """顯示列按鈕後的快速按鈕（上一列/下一列/回到表/Help）。"""
+    return QuickReply(items=[
+        QuickReplyButton(action=MessageAction(label="Row ◀",     text="row previous")),
+        QuickReplyButton(action=MessageAction(label="Row ▶",     text="row next")),
+        QuickReplyButton(action=MessageAction(label="Random",     text="random")),
+        QuickReplyButton(action=MessageAction(label="Kana Table", text="Kana Table")),
+        QuickReplyButton(action=MessageAction(label="Help",       text="Help")),
+    ])
+
+
+# =============================
+# 訊息建構
+# =============================
+
+def kana_flex(category: str = "Seion") -> dict:
+    """建立某類別的『列清單』Flex Carousel，每列是一個按鈕（點了後進入該列）。"""
+    rows = KANA_ROWS.get(category, [])
+    bubbles = []
+    for row in rows:
+        bubble = {
+            "type": "bubble",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "button",
+                        "action": {"type": "message", "label": row.strip(), "text": row.strip()},
+                        "style": "primary",
+                        "height": "sm",
+                    }
+                ],
+            },
+        }
+        bubbles.append(bubble)
+    return {"type": "carousel", "contents": bubbles}
+
+
+def generate_kana_buttons(row: str) -> dict:
+    """建立『該列的假名按鈕』Flex Carousel。"""
+    kana_list = row.strip().split()
+    bubbles = []
+    for kana in kana_list:
+        bubble = {
+            "type": "bubble",
+            "size": "micro",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "button",
+                        "action": {"type": "message", "label": kana, "text": kana},
+                        "style": "primary",
+                        "height": "sm",
+                    }
+                ],
+            },
+        }
+        bubbles.append(bubble)
+    return {"type": "carousel", "contents": bubbles}
+
+
+def kana_info_messages(kana: str):
+    """回傳顯示假名資訊（文字+圖片+音檔）的訊息陣列，附 Quick Reply。"""
+    info = fetch_kana_info(kana)
+    if not info:
+        return None
+    return [
+        TextSendMessage(
+            text=f"📖 Stroke order description:\n{info['stroke_order_text']}",
+            quick_reply=quick_reply_for_kana(kana),
+        ),
+        ImageSendMessage(original_content_url=info['image_url'], preview_image_url=info['image_url']),
+        AudioSendMessage(original_content_url=info['audio_url'], duration=3000),
+    ]
+
+
+# =============================
+# LINE Bot 初始化與路由
+# =============================
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler      = WebhookHandler(LINE_CHANNEL_SECRET)
 
@@ -108,6 +255,7 @@ def home():
 
 @app.route("/check", methods=["POST"])
 def check_image():
+    """畫布上傳的手寫圖片 vs 標準圖 比對（SSIM）。"""
     data = request.json or {}
     image_data = data.get("image")
     answer     = data.get("answer")
@@ -135,129 +283,19 @@ def check_image():
         return jsonify({"correct": False, "error": str(e)}), 500
 
 
-# =============================
-# Flex builders for Kana table
-# =============================
-
-def kana_flex(category: str = "Seion") -> dict:
-    rows = KANA_ROWS.get(category, [])
-    bubbles = []
-    for row in rows:
-        bubble = {
-            "type": "bubble",
-            "body": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {
-                        "type": "button",
-                        "action": {
-                            "type": "message",
-                            "label": row.strip(),
-                            "text": row.strip(),
-                        },
-                        "style": "primary",
-                        "height": "sm",
-                    }
-                ],
-            },
-        }
-        bubbles.append(bubble)
-
-    return {"type": "carousel", "contents": bubbles}
-
-
-def generate_kana_buttons(row: str) -> dict:
-    kana_list = row.strip().split()
-    bubbles = []
-    for kana in kana_list:
-        bubble = {
-            "type": "bubble",
-            "size": "micro",
-            "body": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {
-                        "type": "button",
-                        "action": {
-                            "type": "message",
-                            "label": kana,
-                            "text": kana,
-                        },
-                        "style": "primary",
-                        "height": "sm",
-                    }
-                ],
-            },
-        }
-        bubbles.append(bubble)
-    return {"type": "carousel", "contents": bubbles}
-
-
-# =============================
-# Drill utilities: NEXT / PREV / REPEAT
-# =============================
-
-def category_of(kana: str) -> str:
-    for cat, seq in KANA_SEQ.items():
-        if kana in seq:
-            return cat
-    return "Seion"  # default fallback
-
-
-def step_kana(kana: str, step: int = 1) -> str:
-    cat = category_of(kana)
-    seq = KANA_SEQ[cat]
-    i = seq.index(kana)
-    return seq[(i + step) % len(seq)]
-
-
-def quick_reply_for(kana: str) -> QuickReply:
-    return QuickReply(items=[
-        QuickReplyButton(action=MessageAction(label="◀ Previous", text=f"previous {kana}")),
-        QuickReplyButton(action=MessageAction(label="🔁 Repeat", text=f"repeat {kana}")),
-        QuickReplyButton(action=MessageAction(label="Next ▶", text=f"next {kana}")),
-        QuickReplyButton(action=MessageAction(label="Kana Table", text="Kana Table")),
-        QuickReplyButton(action=MessageAction(label="Help", text="Help")),
-    ])
-
-
-def kana_info_messages(kana: str):
-    info = fetch_kana_info(kana)
-    if not info:
-        return None
-    messages = [
-        TextSendMessage(text=f"📖 Stroke order description:\n{info['stroke_order_text']}", quick_reply=quick_reply_for(kana)),
-        ImageSendMessage(original_content_url=info['image_url'], preview_image_url=info['image_url']),
-        AudioSendMessage(original_content_url=info['audio_url'], duration=3000),
-    ]
-    return messages
-
-
-def remember_user_kana(event, kana: str):
-    try:
-        uid = getattr(event.source, "user_id", None)
-        if uid:
-            LAST_KANA_BY_USER[uid] = kana
-    except Exception:
-        pass
-
-
-HELP_TEXT = (
-    "📘 How to use\n"
-    "• After you pick a kana from the Kana Table, quick buttons will appear: Previous / Repeat / Next.\n"
-    "• You can also type: 'next', 'previous', 'repeat'.\n"
-    "  If you don't add a kana after the command, I'll use the last kana you viewed.\n"
-    "• Supported formats: 'next あ', 'previous そ', 'repeat む'.\n"
-)
-
-
 @handler.add(MessageEvent, message=TextMessage)
 def handle_msg(event):
+    """主要指令處理：
+    - Start Practice / Kana Table / Help
+    - 類別切換：Seion / Dakuon / Handakuon
+    - 列導覽：點列本文 or "row next" / "row previous"
+    - 假名導覽：點假名 or "next/previous/repeat [kana]"
+    - 其他：random（隨機抽一個假名）
+    """
     text = event.message.text.strip()
+    uid  = get_user_id(event)
 
-    # Start
+    # 入口：Start Practice
     if text == "Start Practice":
         qr = QuickReply(items=[
             QuickReplyButton(action=URIAction(label="Open Canvas", uri=LIFF_URL)),
@@ -267,8 +305,11 @@ def handle_msg(event):
         line_bot_api.reply_message(event.reply_token, TextSendMessage("Choose a function 👇", quick_reply=qr))
         return
 
-    # Kana Table entry
+    # 入口：Kana Table
     if text == "Kana Table":
+        # 預設先記錄類別為 Seion，列索引 0（便於之後 row next/previous）
+        if uid:
+            USER_STATE[uid] = {"category": "Seion", "row_index": 0, "last_kana": USER_STATE.get(uid, {}).get("last_kana")}
         line_bot_api.reply_message(
             event.reply_token,
             TextSendMessage(
@@ -282,57 +323,125 @@ def handle_msg(event):
         )
         return
 
-    # Category chosen -> show rows carousel
+    # 類別選擇
     if text in ("Seion", "Dakuon", "Handakuon"):
+        if uid:
+            USER_STATE[uid] = {"category": text, "row_index": 0, "last_kana": USER_STATE.get(uid, {}).get("last_kana")}
         line_bot_api.reply_message(
             event.reply_token,
-            FlexSendMessage(alt_text=f"Kana ({text})", contents=kana_flex(text)),
+            [
+                FlexSendMessage(alt_text=f"Kana ({text})", contents=kana_flex(text)),
+                TextSendMessage("Pick a row or use row navigation.", quick_reply=quick_reply_for_row()),
+            ],
         )
         return
 
-    # Row chosen -> show kana buttons
+    # 若點了某一整列（字串完全比對）
     if text in [*KANA_ROWS["Seion"], *KANA_ROWS["Dakuon"], *KANA_ROWS["Handakuon"]]:
+        # 盡量推斷並紀錄目前類別與列索引
+        current_cat = None
+        for cat, rows in KANA_ROWS.items():
+            if text in rows:
+                current_cat = cat
+                row_idx = rows.index(text)
+                if uid:
+                    state = USER_STATE.get(uid, {})
+                    state.update({"category": cat, "row_index": row_idx})
+                    USER_STATE[uid] = state
+                break
         line_bot_api.reply_message(
             event.reply_token,
-            FlexSendMessage(alt_text="Select a kana", contents=generate_kana_buttons(text)),
+            [
+                FlexSendMessage(alt_text="Select a kana", contents=generate_kana_buttons(text)),
+                TextSendMessage("Pick a kana in this row.", quick_reply=quick_reply_for_row()),
+            ],
         )
         return
 
-    # NEXT / PREV / REPEAT commands (English keywords)
-    m = re.match(r"^(next|previous|repeat)(?:\s+(.+))?$", text, flags=re.IGNORECASE)
-    if m:
-        action, maybe_kana = m.group(1).lower(), (m.group(2) or "").strip()
-        uid = getattr(event.source, "user_id", None)
+    # 列導覽：row next / row previous
+    mrow = re.match(r"^row\s+(next|previous)$", text, flags=re.IGNORECASE)
+    if mrow:
+        direction = mrow.group(1).lower()
+        state = USER_STATE.get(uid, {"category": "Seion", "row_index": 0}) if uid else {"category": "Seion", "row_index": 0}
+        cat = state.get("category", "Seion")
+        row_index = state.get("row_index", 0)
+        row_index = step_row(cat, row_index, +1 if direction == "next" else -1)
+        # 更新狀態
+        if uid:
+            state.update({"row_index": row_index})
+            USER_STATE[uid] = state
+        # 顯示新列
+        row_text = KANA_ROWS[cat][row_index]
+        line_bot_api.reply_message(
+            event.reply_token,
+            [
+                FlexSendMessage(alt_text=f"{cat} row", contents=generate_kana_buttons(row_text)),
+                TextSendMessage(f"{cat} - Row {row_index + 1}", quick_reply=quick_reply_for_row()),
+            ],
+        )
+        return
+
+    # 假名導覽：next / previous / repeat [kana?]
+    mnav = re.match(r"^(next|previous|repeat)(?:\s+(.+))?$", text, flags=re.IGNORECASE)
+    if mnav:
+        action, maybe_kana = mnav.group(1).lower(), (mnav.group(2) or "").strip()
+        state = USER_STATE.get(uid, {}) if uid else {}
         current = None
         if maybe_kana in ALL_KANA:
             current = maybe_kana
-        elif uid and uid in LAST_KANA_BY_USER:
-            current = LAST_KANA_BY_USER[uid]
+        elif state.get("last_kana") in ALL_KANA:
+            current = state["last_kana"]
 
         if not current:
-            line_bot_api.reply_message(event.reply_token, TextSendMessage("Please select a kana first, or add a kana after the command, e.g., 'next あ'."))
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage("Please select a kana first, or add a kana after the command, e.g., 'next あ'."),
+            )
             return
 
         if action == "repeat":
             target = current
         elif action == "next":
             target = step_kana(current, +1)
-        else:  # previous
+        else:
             target = step_kana(current, -1)
+
+        # 更新狀態（類別/列索引/最後假名）
+        cat = category_of(target)
+        row_idx = find_row_index_by_kana(cat, target)
+        if uid:
+            USER_STATE[uid] = {"category": cat, "row_index": row_idx, "last_kana": target}
 
         messages = kana_info_messages(target)
         if messages:
-            remember_user_kana(event, target)
             line_bot_api.reply_message(event.reply_token, messages)
         else:
             line_bot_api.reply_message(event.reply_token, TextSendMessage("❌ Data for the kana could not be found."))
         return
 
-    # Single kana selected -> show info with quick replies
+    # 隨機抽一個假名（依目前類別；若無狀態則預設 Seion）
+    if text.lower() == "random":
+        state = USER_STATE.get(uid, {"category": "Seion"}) if uid else {"category": "Seion"}
+        cat = state.get("category", "Seion")
+        target = random.choice(KANA_SEQ[cat])
+        row_idx = find_row_index_by_kana(cat, target)
+        if uid:
+            USER_STATE[uid] = {"category": cat, "row_index": row_idx, "last_kana": target}
+        messages = kana_info_messages(target)
+        if messages:
+            line_bot_api.reply_message(event.reply_token, messages)
+        else:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage("❌ Data for the kana could not be found."))
+        return
+
+    # 單一假名（直接點選）
     if text in ALL_KANA:
+        cat = category_of(text)
+        row_idx = find_row_index_by_kana(cat, text)
+        if uid:
+            USER_STATE[uid] = {"category": cat, "row_index": row_idx, "last_kana": text}
         messages = kana_info_messages(text)
         if messages:
-            remember_user_kana(event, text)
             line_bot_api.reply_message(event.reply_token, messages)
         else:
             line_bot_api.reply_message(event.reply_token, TextSendMessage("❌ Data for the kana could not be found."))
@@ -340,10 +449,17 @@ def handle_msg(event):
 
     # Help
     if text.lower() == "help":
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(HELP_TEXT))
+        help_text = (
+            "📘 How to use\n"
+            "• Choose a category via 'Kana Table' → Seion/Dakuon/Handakuon.\n"
+            "• Pick a row to see kana buttons.\n"
+            "• Type commands: next / previous / repeat [kana?], row next / row previous, random.\n"
+            "• If no kana is given after next/previous/repeat, the last viewed kana will be used.\n"
+        )
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(help_text))
         return
 
-    # Fallback
+    # 其他：提示從 Start Practice 開始
     line_bot_api.reply_message(event.reply_token, TextSendMessage("Type 'Start Practice' to begin ✍️"))
 
 
