@@ -26,6 +26,30 @@ SAMPLE_FOLDER = os.path.join(BASE_DIR, "samples")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(SAMPLE_FOLDER, exist_ok=True)
 
+# 產生 Imagemap 用的類別選單圖片（若不存在）
+def ensure_category_menu_image():
+    """在 static 目錄下建立 1040x1040 的 kana_menu.png，供 Imagemap 使用。"""
+    img_path = os.path.join(UPLOAD_FOLDER, "kana_menu.png")
+    if os.path.exists(img_path):
+        return
+    # 建立彩色底圖並標示三個區塊：Seion / Dakuon / Handakuon
+    import numpy as np
+    canvas = np.zeros((1040, 1040, 3), dtype=np.uint8)
+    # 三條水平色帶
+    canvas[0:346, :, :] = (66, 133, 244)     # 上：藍
+    canvas[346:692, :, :] = (52, 168, 83)    # 中：綠
+    canvas[692:1040, :, :] = (244, 180, 0)   # 下：黃
+    # 文字
+    try:
+        cv2.putText(canvas, 'SEION', (330, 200), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (255, 255, 255), 4, cv2.LINE_AA)
+        cv2.putText(canvas, 'DAKUON', (300, 550), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (255, 255, 255), 4, cv2.LINE_AA)
+        cv2.putText(canvas, 'HANDAKUON', (240, 900), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (50, 50, 50), 4, cv2.LINE_AA)
+    except Exception:
+        pass
+    cv2.imwrite(img_path, canvas)
+
+ensure_category_menu_image()
+
 # =============================
 # 假名表（單一來源）
 # =============================
@@ -177,31 +201,19 @@ def quick_reply_for_kana(kana: str) -> QuickReply:
 # 訊息建構（假名表）
 # =============================
 
-def category_menu_flex() -> dict:
-    """以 Flex 製作酷炫分類選單（非 Template / 非 QuickReply）。"""
-    return {
-        "type": "bubble",
-        "body": {
-            "type": "box",
-            "layout": "vertical",
-            "spacing": "md",
-            "contents": [
-                {"type": "text", "text": "Kana Table", "weight": "bold", "size": "xl"},
-                {"type": "text", "text": "Please choose a category", "size": "sm", "color": "#888888"},
-                {
-                    "type": "box",
-                    "layout": "vertical",
-                    "spacing": "sm",
-                    "margin": "md",
-                    "contents": [
-                        {"type": "button", "style": "primary", "height": "sm", "action": {"type": "message", "label": "Seion", "text": "Seion"}},
-                        {"type": "button", "style": "primary", "height": "sm", "action": {"type": "message", "label": "Dakuon", "text": "Dakuon"}},
-                        {"type": "button", "style": "secondary", "height": "sm", "action": {"type": "message", "label": "Handakuon", "text": "Handakuon"}},
-                    ],
-                },
-            ],
-        },
-    }
+def category_menu_imagemap(base_url: str) -> ImagemapSendMessage:
+    """以 Imagemap 打造三分區可點擊選單（比 Button/QuickReply 更不一樣）。"""
+    return ImagemapSendMessage(
+        base_url=base_url,
+        alt_text="Select a category",
+        base_size=BaseSize(height=1040, width=1040),
+        actions=[
+            MessageImagemapAction(text="Seion", area=ImagemapArea(x=0, y=0, width=1040, height=346)),
+            MessageImagemapAction(text="Dakuon", area=ImagemapArea(x=0, y=346, width=1040, height=346)),
+            MessageImagemapAction(text="Handakuon", area=ImagemapArea(x=0, y=692, width=1040, height=348)),
+        ],
+    )
+
 
 def kana_flex(category: str = "Seion") -> dict:
     """以 Flex Carousel 呈現該類別的每一列；每列為一個按鈕。"""
@@ -336,14 +348,16 @@ def handle_msg(event):
         line_bot_api.reply_message(event.reply_token, TextSendMessage("Choose a function 👇", quick_reply=qr))
         return
 
-    # 入口：Kana Table（改為 Flex 類按鈕：category_menu_flex）
+    # 入口：Kana Table（改為 Imagemap 類互動：category_menu_imagemap）
     if text == "Kana Table":
         # 預設先記錄類別為 Seion，列索引 0（便於之後 row next/previous）
         if uid:
             USER_STATE[uid] = {"category": "Seion", "row_index": 0, "last_kana": USER_STATE.get(uid, {}).get("last_kana")}
+        # 建構圖片連結（LINE 必須能從外部取用）
+        base_url = safe_url(request.host_url.rstrip('/') + '/static/kana_menu.png')
         line_bot_api.reply_message(
             event.reply_token,
-            FlexSendMessage(alt_text="Select a category", contents=category_menu_flex()),
+            category_menu_imagemap(base_url),
         )
         return
 
