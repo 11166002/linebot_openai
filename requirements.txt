@@ -1,6 +1,7 @@
 Flask
 line-bot-sdk
-opencv-python
-scikit-image
-gunicorn
 psycopg2-binary
+opencv-python-headless
+scikit-image
+numpy
+gunicorn
