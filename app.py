@@ -505,3 +505,81 @@ def callback():
     except InvalidSignatureError:
         abort(400)
     return "OK"
+
+# =========================================================
+# 下面是你要合併進來的 FastAPI 推論 API
+# （僅將 app 改名為 api，避免與上面的 Flask app 衝突）
+# 並在文末以 WSGIMiddleware 合併成 asgi_app
+# =========================================================
+# app.py — FastAPI 推論 API（/predict 支援檔案或 base64）
+import os, base64, io
+import numpy as np
+from PIL import Image
+from fastapi import FastAPI, UploadFile, File, Form
+from fastapi.responses import JSONResponse
+import uvicorn
+import tensorflow as tf
+from tensorflow.keras import models
+
+IMG_SIZE = 28
+INVERT_INPUT = True
+MODEL_PATH = os.environ.get("MODEL_PATH", "k49_cnn_best.keras")
+
+api = FastAPI(title="K49 Inference API")  # ←← 改名為 api
+
+# 啟動時載入模型
+model = models.load_model(MODEL_PATH)
+NUM_CLASSES = model.output_shape[-1]
+
+def preprocess_image(img: Image.Image):
+    if img.mode == "RGBA":
+        bg = Image.new("RGB", img.size, (255,255,255))
+        bg.paste(img, mask=img.split()[3])
+        img = bg
+    elif img.mode != "RGB":
+        img = img.convert("RGB")
+    img = img.convert("L").resize((IMG_SIZE, IMG_SIZE), resample=Image.LANCZOS)
+    arr = np.array(img)
+    if INVERT_INPUT:
+        arr = 255 - arr
+    arr = arr.astype(np.float32) / 255.0
+    arr = arr.reshape(1, IMG_SIZE, IMG_SIZE, 1)
+    return arr
+
+@api.get("/healthz")  # ←← 裝飾器綁到 api
+def health():
+    return {"ok": True, "classes": int(NUM_CLASSES)}
+
+@api.post("/predict")  # ←← 裝飾器綁到 api
+async def predict(file: UploadFile = File(None), b64: str = Form(None)):
+    try:
+        if file is not None:
+            img = Image.open(io.BytesIO(await file.read()))
+        elif b64 is not None:
+            if "," in b64: b64 = b64.split(",", 1)[1]
+            img_bytes = base64.b64decode(b64)
+            img = Image.open(io.BytesIO(img_bytes))
+        else:
+            return JSONResponse({"error": "need file or b64"}, status_code=400)
+
+        x = preprocess_image(img)
+        probs = model.predict(x, verbose=0).flatten()
+        topk = min(5, NUM_CLASSES)
+        idx = probs.argsort()[-topk:][::-1]
+        result = [{"class": int(i), "prob": float(probs[i])} for i in idx]
+        return {"topk": result}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+# =========================================================
+# 合併成單一 ASGI 應用：/api → FastAPI；其餘交給 Flask
+# =========================================================
+from starlette.middleware.wsgi import WSGIMiddleware
+from fastapi import FastAPI as _FastAPIForMount
+
+asgi_app = _FastAPIForMount(title="Combined App")
+asgi_app.mount("/api", api)          # FastAPI 掛在 /api
+asgi_app.mount("/", WSGIMiddleware(app))  # Flask 掛在根目錄
+
+if __name__ == "__main__":
+    uvicorn.run("app:asgi_app", host="0.0.0.0", port=7860)
